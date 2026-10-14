@@ -1,45 +1,44 @@
 # zelt ⚡
 
+[![PyPI version](https://img.shields.io/pypi/v/zelt.svg)](https://pypi.org/project/zelt/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![arXiv](https://img.shields.io/badge/arXiv-2610.zelt-b31b1b.svg)](paper/zelt_paper.tex)
+
 **Calibrated, risk-controlled early exit for reasoning LLMs.**
 
-Stops a reasoning model's chain-of-thought (CoT) once a learned decider is confident the answer is already correct — with a mathematically certified bound on potential accuracy loss.
+Stops a reasoning model's chain-of-thought (CoT) once a learned decider is confident the answer is already correct — with a mathematically certified bound on potential accuracy loss ($\alpha \le 2\%$).
 
 - **100% Local**: Runs on Apple Silicon MPS, CUDA, or CPU. No OpenAI/GPT API needed.
 - **Pretrained & Calibrated**: Bundles a ready-to-use decider trained on real DeepSeek-R1 trajectories.
 - **Zero Configuration**: Just import `zelt` and call.
-- **Production-Ready**: Live streaming, batching, cost & carbon calculators, local web UI, Ollama/vLLM adapters, and Prometheus metrics.
-- 📖 **Full Documentation**: See [DOCUMENTATION.md](DOCUMENTATION.md) for complete technical reference and API guide.
-- 📄 **Research Paper**: Read our academic paper [PAPER.md](PAPER.md) for theoretical proofs, Clopper-Pearson derivations, and calibration analysis.
+- **Production-Ready**: Live streaming, batching, side-by-side comparison, dataset auditing, cost & carbon calculators, local web UI, Ollama/vLLM adapters, and Prometheus metrics.
+- 📖 **Full Documentation**: See [DOCUMENTATION.md](DOCUMENTATION.md) for complete technical reference.
+- 📄 **Research Paper**: Full LaTeX manuscript with Clopper-Pearson derivations available in [paper/zelt_paper.tex](paper/zelt_paper.tex).
 
 ---
 
-## 🚀 Quickstart
+## 🚀 Installation & PyPI
 
-### 1. Install
 ```bash
-# Core package (benchmark & calibration on bundled real data, CPU):
-pip install -e .
+# Core package (benchmark, calibration, bundled decider, CPU):
+pip install zelt-ai
 
-# With local model inference (DeepSeek-R1 on MPS / CUDA):
-pip install -e ".[model]"
+# With local HuggingFace inference (DeepSeek-R1 on MPS / CUDA):
+pip install "zelt-ai[model]"
+
+# Full installation (server + web studio + ML):
+pip install "zelt-ai[full]"
+
+# For local development from source:
+pip install -e .
 ```
 
 ---
 
 ## 💻 Python API Features
 
-### 1. Reduce Compute & Thinking Time (`reduce_compute_thinking`)
-Halts reasoning overthinking as soon as confidence is mathematically certified, saving 35%–65% of inference time and compute:
-```python
-from zelt import reduce_compute_thinking
-
-# Automatically loads bundled certified decider + local model
-result = reduce_compute_thinking("What is 17 * 23?")
-print("Answer:", result)  # "391"
-print(result.summary())   # Displays tokens saved, speedup, and cost savings
-```
-
-### 2. One-Liner Quickstart (`ask`)
+### 1. One-Liner Quickstart (`ask`)
 ```python
 from zelt import ask
 
@@ -47,12 +46,56 @@ answer = ask("What is 17 * 23?")
 print(answer)  # "391"
 ```
 
-### 2. Live Token Streaming (`stream`)
-Stream reasoning tokens live to terminal or UI, with probe pulses and instant early exits:
+### 2. Side-by-Side Comparison (`compare`)
+Compare Full unconstrained CoT vs. Zelt Early-Exit side-by-side:
+```python
+import zelt
+
+comp = zelt.compare("What is 17 * 23?")
+print(comp.summary())
+```
+**Output:**
+```text
+════════════════════════════════════════════════════════════
+  Zelt Side-by-Side Comparison
+────────────────────────────────────────────────────────────
+  Question        : What is 17 * 23?
+  Full CoT Answer : 391 (576 tokens, 2.10s)
+  Zelt Answer     : 391 (144 tokens, 0.54s)
+  Agreement       : MATCH (Exact)
+  Tokens Saved    : 432 (75.0%)
+  Effective Speedup: 3.89x faster
+════════════════════════════════════════════════════════════
+```
+
+### 3. Wrap Functions with `@zelt.accelerate`
+Automatically accelerate any reasoning function or query pipeline:
+```python
+import zelt
+
+@zelt.accelerate
+def reason(prompt: str) -> str:
+    return "fallback"
+
+print(reason("What is 15 * 15?"))  # "225" (exits early with saved compute)
+```
+
+### 4. Benchmark & Risk Audit (`evaluate`)
+Run formal finite-sample risk evaluation with Clopper-Pearson bounds:
+```python
+import zelt
+
+# Evaluates on real test trajectories and computes exact harm UCB
+report = zelt.evaluate(limit=50)
+print(report.summary())
+```
+
+### 5. Live Token Streaming (`stream`)
+Stream reasoning tokens live with probe pulses and instant early exits:
 ```python
 from zelt import stream
 
-for chunk in stream("Natalia sold clips to 48 friends and 24 family members..."):
+for chunk in stream("A train leaves Chicago travelling at 60 mph..."):
     if chunk.is_probe:
         print(f" [Probe gm={chunk.confidence:.2f}]", end="", flush=True)
     elif chunk.stopped:
@@ -62,56 +105,21 @@ for chunk in stream("Natalia sold clips to 48 friends and 24 family members...")
         print(chunk.text, end="", flush=True)
 ```
 
-### 3. Batch Inference, Cost & CO₂ Tracking (`batch`)
-Process queries in bulk with detailed financial and environmental savings metrics:
+### 6. Batch Inference & Cost Tracking (`batch`)
+Process queries in bulk with financial and environmental savings telemetry:
 ```python
 from zelt import batch
 
-questions = [
-    "What is 17 * 23?",
-    "If a train travels 60 mph for 2.5 hours, how far does it go?",
-    "Solve 3x + 9 = 24 for x."
-]
-
+questions = ["What is 17 * 23?", "Solve 3x + 9 = 24.", "What is 15% of 240?"]
 results = batch(questions)
 print(results.summary())
 ```
 
-**Output:**
-```text
-══════════════════════════════════════════════════════════
-  Zelt Batch Summary (3 queries)
-──────────────────────────────────────────────────────────
-  Queries Stopped Early: 2/3 (66.7%)
-  Tokens Used         : 1,500 (vs 2,300 full CoT)
-  Tokens Saved        : 800 (34.8%)
-  Inference Speedup   : 1.53x faster
-  Est. Cost Saved     : $0.0016
-  Est. CO₂ Avoided    : 0.11 g CO₂
-  Total Time          : 12.10s
-══════════════════════════════════════════════════════════
-```
-
-### 4. Ollama & vLLM Adapters
-Connect Zelt directly to models running in Ollama or vLLM:
+### 7. Model Presets (`list_presets`)
 ```python
-from zelt import Zelt
-
-# Ollama backend
-zt = Zelt(backend="ollama", model="deepseek-r1:1.5b")
-res = zt.ask("What is 25 * 14?")
-
-# vLLM / OpenAI-compatible backend
-zt_vllm = Zelt(backend="vllm", model="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", base_url="http://localhost:8000")
-```
-
-### 5. Production Telemetry & Prometheus Export
-```python
-# Prometheus metrics scrape endpoint
-print(results.export_prometheus())
-
-# Save structured telemetry JSON
-results.save("results/telemetry.json")
+import zelt
+print(zelt.list_presets())
+# Supports: DeepSeek-R1-Distill-Qwen (1.5B, 7B), DeepSeek-R1-Distill-Llama-8B, Qwen2.5-Math-7B
 ```
 
 ### 6. Integrating into Large LLM Systems

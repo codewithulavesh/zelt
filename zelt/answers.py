@@ -24,13 +24,17 @@ def last_boxed(text):
 
 
 def extract_answer(text):
-    """Prefer \\boxed{...}; fall back to the last number in the text."""
+    """Prefer \\boxed{...} or <answer>...</answer>; fall back to the last number in the text."""
     if not text or not isinstance(text, str):
         return None
     b = last_boxed(text)
     if b is not None:
         return b
-    nums = re.findall(r"-?\d[\d,]*\.?\d*", text)
+    m = re.search(r"<answer>(.*?)</answer>", text, re.DOTALL)
+    if m:
+        return m.group(1).strip()
+    raw_nums = re.findall(r"-?\d[\d,]*\.?\d*", text)
+    nums = [n.rstrip(".") for n in raw_nums if n.rstrip(".")]
     return nums[-1] if nums else None
 
 

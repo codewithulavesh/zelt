@@ -226,6 +226,35 @@ def cmd_ask(a):
         res.save(a.out)
 
 
+def cmd_compare(a):
+    from .api import Zelt
+    zt = Zelt(model=a.model, backend=a.backend, base_url=a.base_url)
+    res = zt.compare(a.question, verbose=True)
+    if a.out:
+        with open(a.out, "w") as f:
+            json.dump(res.to_dict(), f, indent=2)
+        print(f"Saved comparison to {a.out}")
+
+
+def cmd_eval(a):
+    from .api import Zelt
+    zt = Zelt(model=a.model, backend=a.backend, base_url=a.base_url)
+    rep = zt.evaluate(dataset=a.inp, limit=a.limit, alpha=a.alpha, delta=a.delta, verbose=True)
+    if a.out:
+        rep.save(a.out)
+        print(f"Saved evaluation report to {a.out}")
+
+
+def cmd_serve(a):
+    try:
+        import uvicorn
+        from .server import app
+        print(f"Starting production Zelt REST microservice on http://{a.host}:{a.port} ...")
+        uvicorn.run(app, host=a.host, port=a.port)
+    except ImportError:
+        cmd_ui(a)
+
+
 def main():
     ap = argparse.ArgumentParser(prog="zelt")
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -245,11 +274,33 @@ def main():
     u.add_argument("--port", type=int, default=8000)
     u.set_defaults(f=cmd_ui)
 
+    # Serve (FastAPI production microservice)
+    sv = sp.add_parser("serve", help="launch production REST microservice with Prometheus endpoints")
+    model_args(sv)
+    sv.add_argument("--host", default="0.0.0.0")
+    sv.add_argument("--port", type=int, default=8000)
+    sv.set_defaults(f=cmd_serve)
+
     # Ask
     ak = sp.add_parser("ask", help="run early-exit inference on a question")
     model_args(ak); ak.add_argument("--question", "-q", required=True)
     ak.add_argument("--out", default=None, help="Save result JSON to path")
     ak.set_defaults(f=cmd_ask)
+
+    # Compare (Side-by-side)
+    cmp_p = sp.add_parser("compare", help="run side-by-side full vs early-exit with metrics")
+    model_args(cmp_p); cmp_p.add_argument("--question", "-q", required=True)
+    cmp_p.add_argument("--out", default=None, help="Save comparison JSON")
+    cmp_p.set_defaults(f=cmd_compare)
+
+    # Eval (Benchmark audit)
+    ev_p = sp.add_parser("eval", help="evaluate dataset with certified Clopper-Pearson risk bound")
+    model_args(ev_p); ev_p.add_argument("--inp", "-i", default=None, help="JSONL path or None for bundled data")
+    ev_p.add_argument("--limit", "-n", type=int, default=None, help="Max examples to evaluate")
+    ev_p.add_argument("--alpha", type=float, default=0.02, help="Max harm bound")
+    ev_p.add_argument("--delta", type=float, default=0.10, help="Confidence failure rate")
+    ev_p.add_argument("--out", "-o", default=None, help="Save evaluation report to JSON")
+    ev_p.set_defaults(f=cmd_eval)
 
     # Stream
     st = sp.add_parser("stream", help="stream tokens with live early-exit detection")

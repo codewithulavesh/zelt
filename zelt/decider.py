@@ -226,6 +226,24 @@ def cp_upper(k, n, delta):
     return float(beta.ppf(1 - delta, k + 1, n - k))
 
 
+clopper_pearson_ucb = cp_upper
+
+
+def evaluate_policy(examples, decider, alpha=0.02, delta=0.10):
+    """Evaluate a StopDecider policy over trajectory examples with Clopper-Pearson bound."""
+    tau = decider.tau if decider.tau is not None else 0.5
+    seqs = [decider.score(e["probes"]).tolist() for e in examples]
+    res = simulate(examples, seqs, tau)
+    s = summarize(res, examples)
+    n = len(examples)
+    harm_count = sum(r["harm"] for r in res)
+    ucb = cp_upper(harm_count, n, delta)
+    s["harm_count"] = harm_count
+    s["ucb"] = ucb
+    s["speedup"] = (s["full_tokens"] / max(s["tokens"], 1)) if s["tokens"] > 0 else 1.0
+    return s
+
+
 def choose_tau(examples, seqs, grid, alpha, delta):
     """
     Fixed-sequence testing from the most conservative threshold downwards.

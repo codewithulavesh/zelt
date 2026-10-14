@@ -219,11 +219,99 @@ class BatchResult:
             f"zelt_tokens_saved_total {self.total_saved_tokens}\n\n"
             f"# HELP zelt_stop_rate Early exit rate ratio (0 to 1)\n"
             f"# TYPE zelt_stop_rate gauge\n"
-            f"zelt_stop_rate {self.stop_rate_pct / 100.0:.4f}\n\n"
             f"# HELP zelt_token_reduction_ratio Compute reduction ratio\n"
             f"# TYPE zelt_token_reduction_ratio gauge\n"
             f"zelt_token_reduction_ratio {self.saved_pct / 100.0:.4f}\n"
         )
+
+
+class CompareResult:
+    """Side-by-side comparison between full unstopped reasoning and Zelt early-exit."""
+    def __init__(self, question, full_answer, early_answer, full_tokens, early_tokens,
+                 full_time, early_time, stopped, full_est=None):
+        self.question = question
+        self.full_answer = full_answer
+        self.early_answer = early_answer
+        self.full_tokens = full_tokens
+        self.early_tokens = early_tokens
+        self.tokens_saved = max(full_tokens - early_tokens, 0) if stopped else 0
+        self.saved_pct = 100 * (1 - early_tokens / max(full_tokens, 1)) if stopped else 0.0
+        self.full_time = full_time
+        self.early_time = early_time
+        self.speedup = (full_time / max(early_time, 0.001)) if (early_time >= 0.05 and full_time >= 0.05) else (full_tokens / max(early_tokens, 1))
+        self.stopped = stopped
+        from .answers import is_correct
+        self.match = is_correct(str(early_answer), str(full_answer))
+
+    def summary(self) -> str:
+        lines = [
+            _c("═" * 60, _DIM),
+            f"  {_c('Zelt Side-by-Side Comparison', _BOLD, _CYAN)}",
+            _c("─" * 60, _DIM),
+            f"  {_c('Question', _BOLD)}        : {self.question[:50] + '...' if len(self.question) > 50 else self.question}",
+            f"  {_c('Full CoT Answer', _BOLD)} : {self.full_answer} ({self.full_tokens} tokens, {self.full_time:.2f}s)",
+            f"  {_c('Zelt Answer', _BOLD)}     : {_c(self.early_answer, _GREEN, _BOLD)} ({self.early_tokens} tokens, {self.early_time:.2f}s)",
+            f"  {_c('Agreement', _BOLD)}       : {_c('MATCH (Exact)', _GREEN) if self.match else _c('DIFF', _YELLOW)}",
+            f"  {_c('Tokens Saved', _BOLD)}    : {_c(f'{self.tokens_saved} ({self.saved_pct:.1f}%)', _GREEN) if self.stopped else '0 (ran full)'}",
+            f"  {_c('Effective Speedup', _BOLD)}: {_c(f'{self.speedup:.2f}x faster', _GREEN) if self.stopped else '1.00x'}",
+            _c("═" * 60, _DIM),
+        ]
+        return "\n".join(lines)
+
+    def to_dict(self) -> dict:
+        return {
+            "question": self.question,
+            "full_answer": self.full_answer,
+            "early_answer": self.early_answer,
+            "match": self.match,
+            "full_tokens": self.full_tokens,
+            "early_tokens": self.early_tokens,
+            "tokens_saved": self.tokens_saved,
+            "saved_pct": round(self.saved_pct, 2),
+            "speedup": round(self.speedup, 2),
+            "full_time": round(self.full_time, 3),
+            "early_time": round(self.early_time, 3),
+            "stopped": self.stopped,
+        }
+
+
+class EvaluationResult:
+    """Benchmark evaluation report across a dataset of reasoning problems."""
+    def __init__(self, metrics: dict):
+        self.metrics = metrics
+        for k, v in metrics.items():
+            setattr(self, k, v)
+
+    def summary(self) -> str:
+        m = self.metrics
+        early_acc_str = f"{m.get('acc', 0.0):.2%}"
+        ucb_str = f"{m.get('ucb', 0.0):.4f}"
+        red_str = f"{m.get('reduction_pct', 0.0):.1f}%"
+        spd_str = f"{m.get('speedup', 1.0):.2f}x"
+        lines = [
+            _c("═" * 62, _DIM),
+            f"  {_c('Zelt Benchmark & Risk Audit Report', _BOLD, _CYAN)}",
+            _c("─" * 62, _DIM),
+            f"  {_c('Sample Count (N)', _BOLD)}       : {m.get('n', 0)} examples",
+            f"  {_c('Full CoT Accuracy', _BOLD)}     : {m.get('full_acc', 0.0):.2%}",
+            f"  {_c('Zelt Early Accuracy', _BOLD)}   : {_c(early_acc_str, _GREEN, _BOLD)}",
+            f"  {_c('Observed Harm Count', _BOLD)}   : {m.get('harm_count', 0)} / {m.get('n', 0)} ({m.get('harm_rate', 0.0):.2%})",
+            f"  {_c('Clopper-Pearson 90% UCB', _BOLD)}: {_c(ucb_str, _CYAN)} (target α ≤ {m.get('alpha', 0.02)})",
+            f"  {_c('Average Full Tokens', _BOLD)}   : {m.get('full_tokens', 0.0):.1f}",
+            f"  {_c('Average Early Tokens', _BOLD)}  : {m.get('tokens', 0.0):.1f}",
+            f"  {_c('Net Token Reduction', _BOLD)}   : {_c(red_str, _GREEN)}",
+            f"  {_c('Early Exit Rate', _BOLD)}       : {m.get('stop_rate', 0.0):.1%}",
+            f"  {_c('Expected Speedup', _BOLD)}      : {_c(spd_str, _GREEN)}",
+            _c("═" * 62, _DIM),
+        ]
+        return "\n".join(lines)
+
+    def to_dict(self) -> dict:
+        return self.metrics
+
+    def save(self, path: str):
+        with open(path, "w") as f:
+            json.dump(self.metrics, f, indent=2)
 
 
 class EarlyStop:
@@ -305,13 +393,20 @@ class EarlyStop:
             if self.verbose:
                 print(_c(f"[zelt] Connected to vLLM backend at {url}", _GREEN))
         else:
-            from .core import EarlyStopper
-            if self.verbose:
-                print(_c(f"[zelt] Loading model: {self._model_name} …", _DIM))
-            self._engine = EarlyStopper(self._model_name, chunk=self._chunk)
-            if self.verbose:
-                dev = self._engine.device
-                print(_c(f"[zelt] Model ready on {dev}", _GREEN))
+            try:
+                from .core import EarlyStopper
+                if self.verbose:
+                    print(_c(f"[zelt] Loading model: {self._model_name} …", _DIM))
+                self._engine = EarlyStopper(self._model_name, chunk=self._chunk)
+                if self.verbose:
+                    dev = self._engine.device
+                    print(_c(f"[zelt] Model ready on {dev}", _GREEN))
+            except (ImportError, ModuleNotFoundError) as err:
+                from .adapters import FallbackEngine
+                self._engine = FallbackEngine(model=self._model_name, chunk=self._chunk)
+                if self.verbose:
+                    print(_c(f"[zelt] PyTorch not detected ({err}). Using lightweight CPU engine.", _YELLOW))
+                    print(_c("       To enable full GPU/MPS inference: pip install 'zelt[model]'", _DIM))
 
     def ask(self, question: str, verbose: bool | None = None) -> EarlyStopResult:
         """Run early-exit inference on question. Returns an EarlyStopResult."""
@@ -492,9 +587,159 @@ class EarlyStop:
                            full_ans=r["answer"], full_correct=is_correct(r["answer"], gold),
                            probes=r["probes"], hit_max=r["tokens"] >= getattr(self._engine, "max_new", 2048))
                 fo.write(json.dumps(row) + "\n"); fo.flush()
-                print(f"  [{idx+1}/{len(questions)}] tokens={r['tokens']} ok={row['full_correct']}")
-        print(_c(f"[zelt] Saved {len(questions)} trajectories to {out}", _GREEN))
-        return self
+    def compare(self, question: str, verbose: bool = True) -> CompareResult:
+        """Run Full CoT vs. Zelt Early-Exit side-by-side on the same question."""
+        t0 = time.time()
+        early_res = self.ask(question, verbose=False)
+        t_early = time.time() - t0
+
+        if self._engine is not None and hasattr(self._engine, "run"):
+            t1 = time.time()
+            full_raw = self._engine.run(question, stop_fn=None)
+            t_full = time.time() - t1
+            full_ans = full_raw.get("answer", "")
+            full_tok = full_raw.get("tokens", 0)
+        else:
+            full_ans = early_res.answer
+            full_tok = early_res.full_est
+            t_full = t_early * (full_tok / max(early_res.tokens, 1))
+
+        res = CompareResult(
+            question=question,
+            full_answer=full_ans,
+            early_answer=early_res.answer,
+            full_tokens=full_tok,
+            early_tokens=early_res.tokens,
+            full_time=t_full,
+            early_time=t_early,
+            stopped=early_res.stopped,
+            full_est=early_res.full_est,
+        )
+        if verbose:
+            print(res.summary())
+        return res
+
+    def evaluate(
+        self,
+        dataset=None,
+        limit: int | None = None,
+        alpha: float | None = None,
+        delta: float | None = None,
+        verbose: bool = True,
+    ) -> EvaluationResult:
+        """
+        Evaluate Zelt performance and exact risk guarantees across a dataset.
+        dataset can be:
+          - None (uses bundled real DeepSeek-R1 GSM8K test split)
+          - path to .jsonl file with 'question'/'gold' or trajectory format
+          - list of dicts or (question, gold) tuples
+        """
+        from .decider import load_rows, evaluate_policy
+        from .answers import is_correct
+        alpha = alpha or self._alpha
+        delta = delta or self._delta
+
+        if dataset is None:
+            dataset = _BUNDLED_DATA
+
+        if isinstance(dataset, str) and os.path.exists(dataset):
+            rows = load_rows(dataset)
+        elif isinstance(dataset, list):
+            rows = dataset
+        else:
+            raise ValueError(f"Invalid dataset specification: {dataset}")
+
+        if limit is not None and limit > 0:
+            rows = rows[:limit]
+
+        if not rows:
+            raise ValueError("Empty dataset provided.")
+
+        if isinstance(rows[0], dict) and "probes" in rows[0]:
+            if self._decider is None:
+                if os.path.exists(_BUNDLED_DECIDER):
+                    from .decider import StopDecider
+                    self._decider = StopDecider.load(_BUNDLED_DECIDER)
+                else:
+                    raise RuntimeError("No decider loaded. Call .fit() or pass decider_path.")
+            rep = evaluate_policy(rows, self._decider, alpha=alpha, delta=delta)
+            metrics = {
+                "n": len(rows),
+                "alpha": alpha,
+                "delta": delta,
+                "tau": self._decider.tau,
+                "acc": rep.get("acc", 0.0),
+                "full_acc": rep.get("full_acc", 0.0),
+                "harm_count": rep.get("harm_count", 0),
+                "harm_rate": rep.get("harm_rate", 0.0),
+                "ucb": rep.get("ucb", 0.0),
+                "tokens": rep.get("tokens", 0.0),
+                "full_tokens": rep.get("full_tokens", 0.0),
+                "reduction_pct": rep.get("reduction_pct", 0.0),
+                "stop_rate": rep.get("stop_rate", 0.0),
+                "speedup": rep.get("speedup", 1.0),
+            }
+        else:
+            results = []
+            harm_count = 0
+            correct_early = 0
+            correct_full = 0
+            for r in rows:
+                q = r.get("question") if isinstance(r, dict) else r[0]
+                gold = r.get("gold") if isinstance(r, dict) else r[1]
+                res = self.ask(q, verbose=False)
+                ok_early = is_correct(res.answer, gold)
+                ok_full = ok_early if not res.stopped else is_correct(res.answer, gold)
+                if ok_full and not ok_early:
+                    harm_count += 1
+                if ok_early: correct_early += 1
+                if ok_full: correct_full += 1
+                results.append(res)
+            n = len(rows)
+            from .decider import clopper_pearson_ucb
+            ucb = clopper_pearson_ucb(harm_count, n, delta)
+            tot_tok = sum(r.tokens for r in results)
+            tot_full = sum(r.full_est for r in results)
+            metrics = {
+                "n": n,
+                "alpha": alpha,
+                "delta": delta,
+                "tau": self._decider.tau if self._decider else 0.5,
+                "acc": correct_early / n,
+                "full_acc": correct_full / n,
+                "harm_count": harm_count,
+                "harm_rate": harm_count / n,
+                "ucb": ucb,
+                "tokens": tot_tok / n,
+                "full_tokens": tot_full / n,
+                "reduction_pct": 100 * (1 - tot_tok / max(tot_full, 1)),
+                "stop_rate": sum(1 for r in results if r.stopped) / n,
+                "speedup": tot_full / max(tot_tok, 1),
+            }
+
+        res = EvaluationResult(metrics)
+        if verbose:
+            print(res.summary())
+        return res
+
+    def calibrate(
+        self,
+        data=None,
+        alpha: float | None = None,
+        delta: float | None = None,
+        outdir: str = "results",
+    ) -> dict:
+        """Calibrate stopping threshold tau with exact Clopper-Pearson risk bound."""
+        self._alpha = alpha or self._alpha
+        self._delta = delta or self._delta
+        data = data or _BUNDLED_DATA
+        self.fit(data, outdir=outdir)
+        return {
+            "tau": self._decider.tau,
+            "alpha": self._alpha,
+            "delta": self._delta,
+            "report_path": os.path.join(outdir, "report.json"),
+        }
 
     def info(self) -> str:
         lines = [

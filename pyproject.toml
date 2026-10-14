@@ -1,46 +1,100 @@
 [project]
-name = "zelt"
-version = "0.2.0"
+name = "zelt-ai"
+version = "0.2.1"
 description = "Calibrated, risk-controlled early exit for reasoning LLMs — stop thinking when the answer is ready"
 readme = "README.md"
 license = "MIT"
+authors = [
+  { name = "Ulavayya K. Karaguppi", email = "ulaveshk2@gmail.com" }
+]
+maintainers = [
+  { name = "Ulavayya K. Karaguppi", email = "ulaveshk2@gmail.com" }
+]
 requires-python = ">=3.9"
-keywords = ["llm", "early-exit", "reasoning", "efficiency", "ai", "nlp"]
+keywords = [
+  "llm",
+  "early-exit",
+  "reasoning",
+  "efficiency",
+  "deepseek",
+  "deepseek-r1",
+  "cot",
+  "conformal-prediction",
+  "risk-control",
+  "test-time-compute",
+  "nlp",
+  "ai"
+]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Intended Audience :: Developers",
   "Intended Audience :: Science/Research",
-
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
 ]
-dependencies = ["numpy", "scipy", "scikit-learn", "joblib", "matplotlib"]
+dependencies = [
+  "numpy",
+  "scipy",
+  "scikit-learn",
+  "joblib",
+  "matplotlib"
+]
 
 [project.optional-dependencies]
 model = ["torch", "transformers>=4.45", "datasets"]
 server = ["fastapi", "uvicorn"]
-full  = ["torch", "transformers>=4.45", "datasets", "fastapi", "uvicorn"]
+full  = ["torch", "transformers>=4.45", "datasets", "fastapi", "uvicorn", "rich", "pydantic"]
+dev   = [
+  "pytest>=7.0",
+  "pytest-cov>=4.0",
+  "ruff>=0.4",
+  "mypy>=1.8",
+  "build",
+  "twine",
+]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/zelt"
-Documentation = "https://github.com/yourusername/zelt/blob/main/DOCUMENTATION.md"
-"Bug Tracker" = "https://github.com/yourusername/zelt/issues"
+Homepage = "https://github.com/codewithulavesh/zelt"
+Documentation = "https://github.com/codewithulavesh/zelt/blob/main/DOCUMENTATION.md"
+Repository = "https://github.com/codewithulavesh/zelt.git"
+"Bug Tracker" = "https://github.com/codewithulavesh/zelt/issues"
+"Research Paper" = "https://github.com/codewithulavesh/zelt/blob/main/PAPER.md"
+Changelog = "https://github.com/codewithulavesh/zelt/blob/main/CHANGELOG.md"
 
 [project.scripts]
 zelt = "zelt.cli:main"
 earlystop = "zelt.cli:main"
 
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["zelt*", "earlystop*"]
 
 [tool.setuptools.package-data]
-zelt = ["data/*"]
+zelt = ["data/*", "py.typed"]
 earlystop = ["data/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]  # line too long — handled by formatter
+
+[tool.mypy]
+python_version = "3.9"
+ignore_missing_imports = true
+warn_return_any = false
