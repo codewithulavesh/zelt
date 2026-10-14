@@ -1,5 +1,3 @@
-<div align="center">
-
 # ⚡ Zelt
 
 ### Stop reasoning LLMs from overthinking.
@@ -26,8 +24,6 @@ Cut tokens and latency by stopping generation the moment the answer is ready, wi
 pip install zelt-ai
 ```
 
-</div>
-
 ---
 
 ## 💡 Why Zelt?
@@ -39,7 +35,7 @@ Full chain-of-thought   ██████████████████�
                         ▲ answer is already correct here
 Zelt early exit         █████████                             144 tokens · 0.54 s   ⚡ stopped
 ```
-<sub>Illustrative run on <code>What is 17 * 23?</code>. Measured averages on a real benchmark are in <a href="#-measured-performance">Measured Performance</a>.</sub>
+*Illustrative run on `What is 17 * 23?`. Measured averages on a real benchmark are in Measured Performance.*
 
 **Zelt watches the reasoning as it unfolds.** At regular intervals it takes a cheap look at what the model would answer *right now*, scores how trustworthy that answer is, and stops generation once it is confident enough. The confidence threshold is calibrated with a finite-sample statistical bound, so you get **a measured, bounded accuracy risk instead of a guess**.
 
@@ -78,7 +74,7 @@ pip install "zelt-ai[full]"
 | `full` | `model` + `server` | You want the complete toolkit |
 | `dev` | Test and lint tooling | You contribute to Zelt |
 
-> [!NOTE]
+> **Note**
 > Requires **Python 3.9+**. Runs on Apple Silicon (MPS), NVIDIA (CUDA), or plain CPU.
 
 ---
@@ -107,15 +103,23 @@ zelt ask -q "What is 17 * 23?"
 
 ## 🧠 How it works
 
-```mermaid
-flowchart LR
-    A["Prompt"] --> B["Reasoning model<br/>DeepSeek-R1 · Qwen · ..."]
-    B -->|"every 48 tokens"| C["Probe<br/>greedy decode ~10 tokens"]
-    C --> D["Extract 18 signals"]
-    D --> E["Decider<br/>P(correct | signals)"]
-    E --> F{"P ≥ τ ?"}
-    F -->|"yes"| G["⚡ Stop early<br/>return probed answer"]
-    F -->|"no"| B
+```text
+ Prompt
+   │
+   ▼
+ Reasoning model (DeepSeek-R1 · Qwen · ...) ◄──────────────┐
+   │                                                        │
+   │ every 48 tokens                                        │
+   ▼                                                        │
+ Probe: greedy decode of ~10 tokens                         │
+   │                                                        │
+   ▼                                                        │
+ Extract 18 signals ──► Decider: P(correct | signals)       │
+                              │                             │
+                      P ≥ τ ? │                             │
+                 ┌── yes ─────┴───── no ────────────────────┘
+                 ▼
+          ⚡ Stop early, return probed answer
 ```
 
 1. **Periodic probes.** Every `k` tokens (default 48), Zelt briefly forces the model to commit to an answer using a short greedy decode (~10 tokens). This is a cheap peek, and the main generation continues unaffected if the answer isn't trusted yet.
@@ -124,16 +128,11 @@ flowchart LR
 4. **Risk-controlled threshold.** The stopping threshold **τ** is chosen using a **Clopper-Pearson** upper confidence bound so that the *harm rate* stays at or below **α** (default **2%**) with confidence **1 − δ** (default **90%**).
 5. **Adaptive stop.** The moment `P(correct) ≥ τ`, generation halts and the probed answer is returned.
 
-<details>
-<summary><b>What is "harm" and why does the bound matter?</b></summary>
-
-<br>
+#### What is "harm" and why does the bound matter?
 
 *Harm* means Zelt stopped early **and** the early answer was wrong where full chain-of-thought would have been right. That is the failure you care about.
 
 A naive confidence cutoff gives you no guarantee on how often that happens. Zelt instead picks τ so that, on calibration data, the **upper confidence bound** of the harm rate is at most α. With the defaults, you are bounding harm at **≤ 2% with 90% confidence**, an explicit, auditable trade-off rather than a hope.
-
-</details>
 
 ---
 
@@ -178,7 +177,7 @@ Okay, so Natalia sold 48 clips to friends and 24 to family. Let me add them...
 [⚡ Probe at token 96: confidence=0.93]
 ✅ Ready! Answer: 72
 ```
-<sub>Illustrative output. Actual text and scores depend on the model.</sub>
+*Illustrative output. Actual text and scores depend on the model.*
 
 ### 3. Side-by-side comparison: `zelt.compare`
 
@@ -202,7 +201,7 @@ print(zelt.compare("What is 15 * 3?").summary())
   Effective Speedup: 3.89x faster
 ════════════════════════════════════════════════════════════
 ```
-<sub>Sample output. Per-question savings vary; easy questions save the most.</sub>
+*Sample output. Per-question savings vary; easy questions save the most.*
 
 ### 4. Soft token budgets: `zelt.token_budget`
 
@@ -397,7 +396,7 @@ Evaluated on **real DeepSeek-R1-Distill-Qwen-1.5B trajectories** on **GSM8K** (1
 - 🛡️ **Certified harm ≤ 2% at 90% confidence**
 - 📐 **AUROC 0.9976** and **ECE 0.014**, about **3× better calibrated** than raw confidence
 
-> [!TIP]
+> **Tip**
 > The fixed token budget is the common baseline: it saves tokens but loses accuracy (−1.51%) because it cuts blindly. Zelt saves more *and* keeps accuracy, because it only stops when the answer is actually ready.
 
 ### What this means in cost
@@ -409,7 +408,7 @@ A back-of-the-envelope example using the **net** figure, so probe overhead is al
 1,000,000 queries                          ≈  209 million tokens saved
 At an example price of $2 per 1M output tokens  →  ≈ $419 saved
 ```
-<sub>Hypothetical price for illustration. On self-hosted GPUs the saving shows up as lower latency and higher throughput instead.</sub>
+*Hypothetical price for illustration. On self-hosted GPUs the saving shows up as lower latency and higher throughput instead.*
 
 ### Scope and limitations
 
@@ -471,50 +470,25 @@ print(report.summary())     # includes the exact harm upper confidence bound
 
 ## ❓ FAQ
 
-<details>
-<summary><b>Will Zelt change my model's answers?</b></summary>
-
-<br>
+#### Will Zelt change my model's answers?
 
 Only when it stops early *and* the early answer differs from the final one, which is what "harm" measures. Zelt bounds how often that happens (≤ 2% at 90% confidence by default) and reports the observed rate, which was 0.00% on the GSM8K test split.
 
-</details>
-
-<details>
-<summary><b>Do I need a GPU or an API key?</b></summary>
-
-<br>
+#### Do I need a GPU or an API key?
 
 No API key, and no GPU is required. Zelt runs on CPU, Apple Silicon (MPS), or CUDA, and can also front an existing Ollama or vLLM server.
 
-</details>
-
-<details>
-<summary><b>Does it work with my model?</b></summary>
-
-<br>
+#### Does it work with my model?
 
 Presets cover DeepSeek-R1-Distill (Qwen 1.5B / 7B, Llama 8B) and Qwen2.5-Math-7B. Other chain-of-thought models can work through the Hugging Face, Ollama, or vLLM adapters; use `zelt fit` to calibrate the decider for them.
 
-</details>
-
-<details>
-<summary><b>What do probes cost?</b></summary>
-
-<br>
+#### What do probes cost?
 
 Each probe is a short (~10 token) greedy decode every 48 tokens. That overhead is why the **net** reduction (27.9%) is lower than the **gross** reduction (37.9%) in the benchmark. Both are reported so you can judge honestly.
 
-</details>
-
-<details>
-<summary><b>Why not just cap the token budget?</b></summary>
-
-<br>
+#### Why not just cap the token budget?
 
 A fixed cap cuts easy and hard questions at the same point. In the benchmark, a fixed budget lost 1.51% accuracy while saving less than Zelt. Zelt decides per question, based on evidence that the answer is ready.
-
-</details>
 
 ---
 
@@ -564,10 +538,6 @@ If Zelt is useful in your research, please cite it:
 
 Released under the [MIT License](LICENSE).
 
-<div align="center">
-
 **Built by [Ulavayya K. Karaguppi](https://github.com/codewithulavesh)** · Instagram [@ulavesh_7](https://instagram.com/ulavesh_7)
 
 If Zelt saves you tokens, a ⭐ on the repo helps others find it.
-
-</div>
