@@ -3,6 +3,8 @@ Adapters for external LLM servers (Ollama, vLLM, OpenAI-compatible APIs).
 Allows running early-exit reasoning when models are hosted on local servers.
 """
 
+from __future__ import annotations
+
 import json
 import urllib.error
 import urllib.request

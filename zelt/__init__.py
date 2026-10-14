@@ -29,6 +29,8 @@ Quickstart (zero config)
     zt = zelt.from_vllm("deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B")
 """
 
+from __future__ import annotations
+
 import logging as _logging
 
 from .answers import extract_answer, is_correct, same_answer
@@ -46,7 +48,7 @@ from .decider import StopDecider, featurize, fit_and_report, make_stop_fn
 Zelt = EarlyStop
 ZeltResult = EarlyStopResult
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 
 # Library-level logger — users can configure via logging.getLogger('zelt')
 _log = _logging.getLogger(__name__)

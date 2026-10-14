@@ -3,6 +3,8 @@ Production REST Microservice for Zelt.
 Deployable with Uvicorn, Gunicorn, Docker, or Kubernetes.
 """
 
+from __future__ import annotations
+
 import time
 from typing import List, Optional
 

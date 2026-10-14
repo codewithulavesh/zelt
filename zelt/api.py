@@ -14,6 +14,8 @@ High-level Zelt / EarlyStop API — designed for zero-friction use.
 That's it. 100% local, no API keys, mathematically risk-controlled.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import time

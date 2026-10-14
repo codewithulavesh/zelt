@@ -1,6 +1,6 @@
 [project]
 name = "zelt-ai"
-version = "0.2.1"
+version = "0.2.2"
 description = "Calibrated, risk-controlled early exit for reasoning LLMs — stop thinking when the answer is ready"
 readme = "README.md"
 license = "MIT"
