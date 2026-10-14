@@ -57,8 +57,8 @@ class StreamChunk:
         self.token_count = token_count
         self.is_probe = is_probe
         self.probe = probe
-        self.score = score
         self.confidence = probe.get("gm", 0.0) if probe else (score or 0.0)
+        self.score = score if score is not None else self.confidence
         self.stopped = stopped
         self.answer = answer
 

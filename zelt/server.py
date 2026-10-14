@@ -5,13 +5,14 @@ Deployable with Uvicorn, Gunicorn, Docker, or Kubernetes.
 
 from __future__ import annotations
 
+import json
 import time
 from typing import List, Optional
 
 try:
     from fastapi import FastAPI, HTTPException, status
     from fastapi.middleware.cors import CORSMiddleware
-    from fastapi.responses import PlainTextResponse
+    from fastapi.responses import PlainTextResponse, StreamingResponse
     from pydantic import BaseModel, Field
 
     HAS_FASTAPI = True
@@ -23,7 +24,7 @@ if HAS_FASTAPI:
     app = FastAPI(
         title="Zelt AI Reasoning Microservice",
         description="Calibrated, risk-controlled early exit for reasoning Large Language Models.",
-        version="0.2.1",
+        version="0.2.2",
         docs_url="/docs",
         redoc_url="/redoc",
     )
@@ -37,7 +38,8 @@ if HAS_FASTAPI:
     )
 
     class ReasonRequest(BaseModel):
-        prompt: str = Field(..., description="Reasoning prompt or math word problem.")
+        prompt: Optional[str] = Field(None, description="Reasoning prompt or math word problem.")
+        question: Optional[str] = Field(None, description="Alias for prompt.")
         model: Optional[str] = Field(None, description="Model ID or name override.")
         alpha: Optional[float] = Field(0.02, description="Maximum permitted harm rate bound.")
         delta: Optional[float] = Field(0.10, description="Confidence failure probability.")
@@ -54,7 +56,8 @@ if HAS_FASTAPI:
         elapsed_seconds: float
 
     class CompareRequest(BaseModel):
-        prompt: str
+        prompt: Optional[str] = Field(None, description="Prompt to compare.")
+        question: Optional[str] = Field(None, description="Alias for prompt.")
 
     class CompareResponse(BaseModel):
         question: str
@@ -69,7 +72,8 @@ if HAS_FASTAPI:
         stopped: bool
 
     class BatchRequest(BaseModel):
-        prompts: List[str]
+        prompts: Optional[List[str]] = Field(None, description="List of prompt strings.")
+        questions: Optional[List[str]] = Field(None, description="Alias for prompts.")
 
     @app.get("/health", status_code=status.HTTP_200_OK)
     def health_check():
@@ -87,12 +91,20 @@ if HAS_FASTAPI:
         batch_sample = zelt.batch(["2+2"], verbose=False)
         return batch_sample.export_prometheus()
 
+    @app.post("/ask", response_model=ReasonResponse)
     @app.post("/v1/reason", response_model=ReasonResponse)
     def reason(req: ReasonRequest):
         import zelt
 
+        query = req.question or req.prompt
+        if not query:
+            raise HTTPException(
+                status_code=422,
+                detail="Either 'question' or 'prompt' must be provided in the request body.",
+            )
+
         try:
-            res = zelt.ask(req.prompt)
+            res = zelt.ask(query)
             d = res.to_dict()
             return ReasonResponse(
                 answer=str(res),
@@ -108,12 +120,46 @@ if HAS_FASTAPI:
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
+    @app.post("/stream")
+    def stream_endpoint(req: ReasonRequest):
+        import zelt
+
+        query = req.question or req.prompt
+        if not query:
+            raise HTTPException(
+                status_code=422,
+                detail="Either 'question' or 'prompt' must be provided in the request body.",
+            )
+
+        def event_generator():
+            for chunk in zelt.stream(query):
+                payload = {
+                    "text": chunk.text,
+                    "token_count": chunk.token_count,
+                    "is_probe": chunk.is_probe,
+                    "confidence": chunk.confidence,
+                    "score": chunk.score,
+                    "stopped": chunk.stopped,
+                    "answer": chunk.answer,
+                }
+                yield f"data: {json.dumps(payload)}\n\n"
+
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+    @app.post("/compare", response_model=CompareResponse)
     @app.post("/v1/compare", response_model=CompareResponse)
     def compare(req: CompareRequest):
         import zelt
 
+        query = req.question or req.prompt
+        if not query:
+            raise HTTPException(
+                status_code=422,
+                detail="Either 'question' or 'prompt' must be provided in the request body.",
+            )
+
         try:
-            comp = zelt.compare(req.prompt, verbose=False)
+            comp = zelt.compare(query, verbose=False)
             d = comp.to_dict()
             return CompareResponse(
                 question=d["question"],
@@ -130,12 +176,20 @@ if HAS_FASTAPI:
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
 
+    @app.post("/batch")
     @app.post("/v1/batch")
     def batch_process(req: BatchRequest):
         import zelt
 
+        items = req.questions or req.prompts
+        if not items:
+            raise HTTPException(
+                status_code=422,
+                detail="Either 'questions' or 'prompts' list must be provided.",
+            )
+
         try:
-            batch_res = zelt.batch(req.prompts, verbose=False)
+            batch_res = zelt.batch(items, verbose=False)
             return batch_res.to_dict()
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))

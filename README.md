@@ -512,9 +512,10 @@ zelt selftest          # quick pipeline check, no GPU needed
 If Zelt is useful in your research, please cite it:
 
 ```bibtex
-@software{zelt2026,
+@article{karaguppi2026zelt,
   author  = {Karaguppi, Ulavayya K.},
-  title   = {Zelt: Calibrated, Risk-Controlled Early Exit for Reasoning LLMs},
+  title   = {Zelt: Calibrated, Risk-Controlled Early Exit for Reasoning Language Models},
+  journal = {arXiv preprint},
   year    = {2026},
   url     = {https://github.com/codewithulavesh/zelt}
 }
