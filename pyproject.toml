@@ -1,0 +1,46 @@
+[project]
+name = "zelt"
+version = "0.2.0"
+description = "Calibrated, risk-controlled early exit for reasoning LLMs — stop thinking when the answer is ready"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+keywords = ["llm", "early-exit", "reasoning", "efficiency", "ai", "nlp"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Science/Research",
+
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = ["numpy", "scipy", "scikit-learn", "joblib", "matplotlib"]
+
+[project.optional-dependencies]
+model = ["torch", "transformers>=4.45", "datasets"]
+server = ["fastapi", "uvicorn"]
+full  = ["torch", "transformers>=4.45", "datasets", "fastapi", "uvicorn"]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/zelt"
+Documentation = "https://github.com/yourusername/zelt/blob/main/DOCUMENTATION.md"
+"Bug Tracker" = "https://github.com/yourusername/zelt/issues"
+
+[project.scripts]
+zelt = "zelt.cli:main"
+earlystop = "zelt.cli:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["zelt*", "earlystop*"]
+
+[tool.setuptools.package-data]
+zelt = ["data/*"]
+earlystop = ["data/*"]
