@@ -79,6 +79,9 @@ jobs:
     needs: [test, build]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    environment:
+      name: pypi
+      url: https://pypi.org/p/zelt-ai
     permissions:
       id-token: write  # Required for PyPI Trusted Publishing (OIDC)
       contents: write  # Required to create GitHub Release on tag push
@@ -95,14 +98,12 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
-          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
           skip-existing: true
 
       - name: Publish to Production PyPI
         if: startsWith(github.ref, 'refs/tags/v') || github.event.inputs.publish_target == 'pypi'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
           skip-existing: true
 
       - name: Create GitHub Release
