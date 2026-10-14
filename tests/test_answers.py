@@ -1,4 +1,3 @@
-import pytest
 from zelt.answers import extract_answer, is_correct, same_answer
 
 

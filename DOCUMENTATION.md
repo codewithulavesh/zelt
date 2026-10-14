@@ -124,8 +124,8 @@ from zelt import reduce_compute_thinking
 
 # Primary compute-saving entrypoint
 result = reduce_compute_thinking("What is 17 * 23?")
-print("Answer:", result)            # "391"
-print(result.summary())             # Displays tokens saved, speedup, and cost savings
+print("Answer:", result)  # "391"
+print(result.summary())  # Displays tokens saved, speedup, and cost savings
 ```
 
 ### One-Liner Quickstart (`ask`)
@@ -143,8 +143,10 @@ from zelt import Zelt
 
 zt = Zelt()  # Uses bundled DeepSeek-R1 decider with harm bound ≤ 2%
 
-result = zt.ask("Natalia sold clips to 48 friends and 24 family members. How many clips did she sell?")
-print(result)            # "72"
+result = zt.ask(
+    "Natalia sold clips to 48 friends and 24 family members. How many clips did she sell?"
+)
+print(result)  # "72"
 print(result.summary())  # Detailed breakdown of tokens saved and confidence
 ```
 
@@ -166,11 +168,7 @@ for chunk in stream("A car travels 60 miles per hour for 3.5 hours. How far does
 ```python
 from zelt import batch
 
-questions = [
-    "What is 15% of 240?",
-    "If x + 5 = 12, what is 2x?",
-    "How many days are in 6 weeks?"
-]
+questions = ["What is 15% of 240?", "If x + 5 = 12, what is 2x?", "How many days are in 6 weeks?"]
 
 results = batch(questions)
 print(results.summary())
@@ -199,9 +197,7 @@ criteria = ZeltStoppingCriteria(tokenizer, decider=StopDecider.load())
 
 # Standard HuggingFace generation loop - Zelt halts the forward passes dynamically
 outputs = model.generate(
-    inputs,
-    max_new_tokens=2048,
-    stopping_criteria=StoppingCriteriaList([criteria])
+    inputs, max_new_tokens=2048, stopping_criteria=StoppingCriteriaList([criteria])
 )
 ```
 
@@ -213,8 +209,10 @@ from zelt import reduce_compute_thinking
 
 app = FastAPI()
 
+
 class Query(BaseModel):
     prompt: str
+
 
 @app.post("/v1/reason")
 async def handle_reason(query: Query):
@@ -225,13 +223,14 @@ async def handle_reason(query: Query):
         "tokens_saved": result.tokens_saved,
         "compute_saved_percent": result.saved_pct,
         "stopped_early": result.stopped,
-        "cost_saved_usd": result.cost_saved()
+        "cost_saved_usd": result.cost_saved(),
     }
 ```
 
 #### 3. Inside Agent Loops (LangChain, AutoGen, CrewAI)
 ```python
 from zelt import reduce_compute_thinking
+
 
 def reasoning_agent_tool(task_description: str) -> str:
     """Executes complex reasoning sub-tasks with bounded test-time compute."""
@@ -430,10 +429,7 @@ from zelt import Zelt
 zt = Zelt(model="Qwen/Qwen2.5-Math-7B")
 
 # Step 1: Record trajectories on sample questions
-dataset = [
-    ("What is 2+2?", "4"),
-    ("Solve x^2 = 16 for x > 0", "4")
-]
+dataset = [("What is 2+2?", "4"), ("Solve x^2 = 16 for x > 0", "4")]
 zt.record(dataset, out="runs_qwen.jsonl")
 
 # Step 2: Fit and calibrate decider

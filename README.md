@@ -73,9 +73,11 @@ Automatically accelerate any reasoning function or query pipeline:
 ```python
 import zelt
 
+
 @zelt.accelerate
 def reason(prompt: str) -> str:
     return "fallback"
+
 
 print(reason("What is 15 * 15?"))  # "225" (exits early with saved compute)
 ```
@@ -118,6 +120,7 @@ print(results.summary())
 ### 7. Model Presets (`list_presets`)
 ```python
 import zelt
+
 print(zelt.list_presets())
 # Supports: DeepSeek-R1-Distill-Qwen (1.5B, 7B), DeepSeek-R1-Distill-Llama-8B, Qwen2.5-Math-7B
 ```
@@ -137,9 +140,7 @@ criteria = ZeltStoppingCriteria(tokenizer, decider=StopDecider.load())
 
 # Zelt interrupts generation the moment the answer is certified confident!
 outputs = model.generate(
-    input_ids,
-    max_new_tokens=2048,
-    stopping_criteria=StoppingCriteriaList([criteria])
+    input_ids, max_new_tokens=2048, stopping_criteria=StoppingCriteriaList([criteria])
 )
 ```
 
@@ -150,6 +151,7 @@ from zelt import reduce_compute_thinking
 
 app = FastAPI()
 
+
 @app.post("/solve")
 async def solve(prompt: str):
     # Replaces unconstrained 2,000-token CoT with risk-controlled early exit
@@ -158,7 +160,7 @@ async def solve(prompt: str):
         "answer": str(res),
         "tokens_saved": res.tokens_saved,
         "saved_pct": res.saved_pct,
-        "stopped_early": res.stopped
+        "stopped_early": res.stopped,
     }
 ```
 
@@ -166,8 +168,10 @@ async def solve(prompt: str):
 ```python
 from zelt import reduce_compute_thinking
 
+
 class ReasoningTool:
     """Agent tool for complex math & logic sub-tasks without burning token budget."""
+
     def run(self, sub_question: str) -> str:
         return str(reduce_compute_thinking(sub_question, verbose=False))
 ```

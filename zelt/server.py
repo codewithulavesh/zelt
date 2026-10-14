@@ -2,14 +2,16 @@
 Production REST Microservice for Zelt.
 Deployable with Uvicorn, Gunicorn, Docker, or Kubernetes.
 """
-import os
+
 import time
 from typing import List, Optional
+
 try:
     from fastapi import FastAPI, HTTPException, status
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import PlainTextResponse
     from pydantic import BaseModel, Field
+
     HAS_FASTAPI = True
 except ImportError:
     HAS_FASTAPI = False
@@ -78,6 +80,7 @@ if HAS_FASTAPI:
     @app.get("/metrics", response_class=PlainTextResponse)
     def prometheus_metrics():
         import zelt
+
         # Return live Prometheus metrics
         batch_sample = zelt.batch(["2+2"], verbose=False)
         return batch_sample.export_prometheus()
@@ -85,6 +88,7 @@ if HAS_FASTAPI:
     @app.post("/v1/reason", response_model=ReasonResponse)
     def reason(req: ReasonRequest):
         import zelt
+
         try:
             res = zelt.ask(req.prompt)
             d = res.to_dict()
@@ -105,6 +109,7 @@ if HAS_FASTAPI:
     @app.post("/v1/compare", response_model=CompareResponse)
     def compare(req: CompareRequest):
         import zelt
+
         try:
             comp = zelt.compare(req.prompt, verbose=False)
             d = comp.to_dict()
@@ -126,6 +131,7 @@ if HAS_FASTAPI:
     @app.post("/v1/batch")
     def batch_process(req: BatchRequest):
         import zelt
+
         try:
             batch_res = zelt.batch(req.prompts, verbose=False)
             return batch_res.to_dict()
@@ -135,12 +141,14 @@ if HAS_FASTAPI:
     @app.get("/v1/info")
     def info():
         import zelt
+
         return {
             "version": zelt.__version__,
             "presets": zelt.list_presets(),
         }
 
 else:
+
     def create_app():
         raise RuntimeError(
             "FastAPI is required to run the production microservice. Install with: pip install 'zelt-ai[server]'"

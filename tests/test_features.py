@@ -1,6 +1,6 @@
 import pytest
-import numpy as np
-from zelt.decider import featurize, FEATURES
+
+from zelt.decider import FEATURES, featurize
 
 
 def test_featurize_empty():
@@ -9,7 +9,9 @@ def test_featurize_empty():
 
 
 def test_featurize_single_probe():
-    probes = [{"t": 48, "ans": "42", "gm": 0.85, "mean": 0.88, "minp": 0.70, "ent": 0.40, "ptok": 8}]
+    probes = [
+        {"t": 48, "ans": "42", "gm": 0.85, "mean": 0.88, "minp": 0.70, "ent": 0.40, "ptok": 8}
+    ]
     feats = featurize(probes)
     assert feats.shape == (1, len(FEATURES))
     assert feats[0, FEATURES.index("gm")] == pytest.approx(0.85)

@@ -4,19 +4,21 @@ Shared pytest fixtures for the zelt test suite.
 All tests run without GPU / model weights (FallbackEngine is used automatically
 when torch / transformers are not installed or no real model is available).
 """
+
 import pytest
+
 import zelt
 from zelt import (
-    EarlyStop,
-    EarlyStopResult,
     BatchResult,
     CompareResult,
+    EarlyStop,
+    EarlyStopResult,
     EvaluationResult,
     StopDecider,
 )
 
-
 # ── Default instance fixture ──────────────────────────────────────────────────
+
 
 @pytest.fixture(scope="session")
 def zt() -> EarlyStop:
@@ -28,6 +30,7 @@ def zt() -> EarlyStop:
 
 
 # ── Result fixtures ───────────────────────────────────────────────────────────
+
 
 @pytest.fixture(scope="session")
 def simple_result(zt) -> EarlyStopResult:
@@ -55,18 +58,22 @@ def eval_result(zt) -> EvaluationResult:
 
 # ── Decider fixture ───────────────────────────────────────────────────────────
 
+
 @pytest.fixture(scope="session")
 def bundled_decider() -> StopDecider:
     """Return the bundled pre-trained StopDecider."""
     import os
+
     path = os.path.join(os.path.dirname(zelt.__file__), "data", "pretrained_decider.joblib")
     return StopDecider.load(path)
 
 
 # ── Synthetic trajectory fixture ──────────────────────────────────────────────
 
+
 @pytest.fixture(scope="module")
 def synthetic_rows():
     """100 synthetic trajectory rows (no GPU required)."""
     from zelt.synthetic import make_synthetic
+
     return make_synthetic(100, seed=42)

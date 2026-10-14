@@ -1,7 +1,9 @@
-import pytest
 import os
 import tempfile
-from zelt.decider import StopDecider, cp_upper, clopper_pearson_ucb
+
+import pytest
+
+from zelt.decider import StopDecider, clopper_pearson_ucb, cp_upper
 from zelt.synthetic import make_synthetic
 
 

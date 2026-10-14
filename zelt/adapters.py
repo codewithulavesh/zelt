@@ -2,10 +2,11 @@
 Adapters for external LLM servers (Ollama, vLLM, OpenAI-compatible APIs).
 Allows running early-exit reasoning when models are hosted on local servers.
 """
+
 import json
-import urllib.request
 import urllib.error
-import time
+import urllib.request
+
 from .answers import extract_answer
 
 
@@ -14,6 +15,7 @@ class OllamaAdapter:
     Adapter for local Ollama instances (e.g. `ollama run deepseek-r1:1.5b`).
     Streams tokens and triggers early abort when confident answer is detected.
     """
+
     def __init__(self, model="deepseek-r1:1.5b", base_url="http://localhost:11434", chunk=48):
         self.model = model
         self.base_url = base_url.rstrip("/")
@@ -30,14 +32,18 @@ class OllamaAdapter:
 
     def run(self, question, stop_fn=None):
         url = f"{self.base_url}/api/generate"
-        payload = json.dumps({
-            "model": self.model,
-            "prompt": question,
-            "stream": True,
-            "options": {"temperature": 0.0}
-        }).encode("utf-8")
+        payload = json.dumps(
+            {
+                "model": self.model,
+                "prompt": question,
+                "stream": True,
+                "options": {"temperature": 0.0},
+            }
+        ).encode("utf-8")
 
-        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(
+            url, data=payload, headers={"Content-Type": "application/json"}
+        )
         tokens_text = []
         probes = []
         stopped = False
@@ -79,7 +85,7 @@ class OllamaAdapter:
             tokens=token_count,
             probes=probes,
             stopped=stopped,
-            probe_tokens=sum(p.get("ptok", 0) for p in probes)
+            probe_tokens=sum(p.get("ptok", 0) for p in probes),
         )
 
 
@@ -87,7 +93,13 @@ class VLLMAdapter:
     """
     Adapter for vLLM / OpenAI-compatible /v1/completions endpoint with streaming.
     """
-    def __init__(self, model="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", base_url="http://localhost:8000", chunk=48):
+
+    def __init__(
+        self,
+        model="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+        base_url="http://localhost:8000",
+        chunk=48,
+    ):
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.chunk = chunk
@@ -103,15 +115,19 @@ class VLLMAdapter:
 
     def run(self, question, stop_fn=None):
         url = f"{self.base_url}/v1/completions"
-        payload = json.dumps({
-            "model": self.model,
-            "prompt": question,
-            "stream": True,
-            "max_tokens": 2048,
-            "temperature": 0.0
-        }).encode("utf-8")
+        payload = json.dumps(
+            {
+                "model": self.model,
+                "prompt": question,
+                "stream": True,
+                "max_tokens": 2048,
+                "temperature": 0.0,
+            }
+        ).encode("utf-8")
 
-        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+        req = urllib.request.Request(
+            url, data=payload, headers={"Content-Type": "application/json"}
+        )
         tokens_text = []
         probes = []
         stopped = False
@@ -136,7 +152,13 @@ class VLLMAdapter:
                 if token_count >= self.chunk and token_count % self.chunk == 0:
                     current_text = "".join(tokens_text)
                     ans = extract_answer(current_text)
-                    pr = {"t": token_count, "ans": ans, "gm": 0.88 if ans else 0.2, "ent": 0.5, "ptok": 10}
+                    pr = {
+                        "t": token_count,
+                        "ans": ans,
+                        "gm": 0.88 if ans else 0.2,
+                        "ent": 0.5,
+                        "ptok": 10,
+                    }
                     probes.append(pr)
                     if stop_fn is not None and stop_fn(probes):
                         stopped = True
@@ -150,7 +172,7 @@ class VLLMAdapter:
             tokens=token_count,
             probes=probes,
             stopped=stopped,
-            probe_tokens=sum(p.get("ptok", 0) for p in probes)
+            probe_tokens=sum(p.get("ptok", 0) for p in probes),
         )
 
 
@@ -159,6 +181,7 @@ class FallbackEngine:
     Lightweight CPU engine used when PyTorch weights are not locally installed.
     Supports instant evaluation, pipeline testing, and zero-dependency environments.
     """
+
     def __init__(self, model="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", chunk=48):
         self.model = model
         self.chunk = chunk
@@ -166,14 +189,19 @@ class FallbackEngine:
 
     def run(self, question, stop_fn=None):
         import re
+
         ans = None
         m = re.search(r"(\d+)\s*([\+\-\*\/])\s*(\d+)", question)
         if m:
             a, op, b = int(m.group(1)), m.group(2), int(m.group(3))
-            if op == "+": ans = str(a + b)
-            elif op == "-": ans = str(a - b)
-            elif op == "*": ans = str(a * b)
-            elif op == "/" and b != 0: ans = str(a // b)
+            if op == "+":
+                ans = str(a + b)
+            elif op == "-":
+                ans = str(a - b)
+            elif op == "*":
+                ans = str(a * b)
+            elif op == "/" and b != 0:
+                ans = str(a // b)
         if ans is None:
             ans = "72"
 

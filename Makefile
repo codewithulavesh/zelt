@@ -7,6 +7,10 @@ install:
 test:
 	pytest tests/ -v --durations=5
 
+lint:
+	ruff check .
+	ruff format --check .
+
 build: clean
 	python -m build
 	twine check dist/*

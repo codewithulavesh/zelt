@@ -31,9 +31,16 @@ Quickstart (zero config)
 
 import logging as _logging
 
-from .api      import EarlyStop, EarlyStopResult, StreamChunk, BatchResult, CompareResult, EvaluationResult
-from .answers  import extract_answer, is_correct
-from .decider  import StopDecider, make_stop_fn, featurize, fit_and_report
+from .answers import extract_answer, is_correct, same_answer
+from .api import (
+    BatchResult,
+    CompareResult,
+    EarlyStop,
+    EarlyStopResult,
+    EvaluationResult,
+    StreamChunk,
+)
+from .decider import StopDecider, featurize, fit_and_report, make_stop_fn
 
 # Primary aliases for zelt
 Zelt = EarlyStop
@@ -93,14 +100,17 @@ def calibrate(data=None, alpha: float = 0.02, delta: float = 0.10, outdir: str =
 
 def accelerate(func=None, **kwargs):
     """Decorator to wrap reasoning LLM calls with automated early stopping."""
+
     def decorator(fn):
         def wrapper(*args, **fn_kwargs):
             if args and isinstance(args[0], str):
                 return ask(args[0], **kwargs)
             return fn(*args, **fn_kwargs)
+
         wrapper.__name__ = getattr(fn, "__name__", "accelerate_wrapper")
         wrapper.__doc__ = getattr(fn, "__doc__", "")
         return wrapper
+
     if func is not None:
         return decorator(func)
     return decorator
@@ -201,10 +211,8 @@ def token_budget(
     >>> res = zelt.token_budget(200, "What is 17 * 23?")
     >>> print(res)  # answer extracted within budget
     """
-    from .decider import StopDecider, make_stop_fn
-    import os
+    import time
 
-    _BUNDLED_DECIDER = os.path.join(os.path.dirname(__file__), "data", "pretrained_decider.joblib")
     zt = EarlyStop(**kwargs)
 
     # Override stop function: stop when we have an answer, regardless of tau
@@ -215,7 +223,6 @@ def token_budget(
         # Stop if we have an answer and tokens already exceeded budget
         return last.get("ans") is not None and last.get("t", 0) >= max_tokens
 
-    import time
     zt._load_engine()
     t0 = time.time()
     out = zt._engine.run(question, stop_fn=budget_stop_fn)
@@ -270,7 +277,8 @@ def risk_report(
     >>> report = zelt.risk_report("my_runs.jsonl")  # your own trajectories
     """
     import os
-    from .decider import load_rows, fit_and_report
+
+    from .decider import fit_and_report, load_rows
 
     _BUNDLED_DATA = os.path.join(os.path.dirname(__file__), "data", "gsm8k_real_deepseek_r1.jsonl")
 
@@ -282,6 +290,7 @@ def risk_report(
         rows = list(data)
 
     import tempfile
+
     outdir = tempfile.mkdtemp(prefix="zelt_risk_report_")
     return fit_and_report(rows, outdir=outdir, alpha=alpha, delta=delta, verbose=verbose)
 
@@ -354,6 +363,7 @@ __all__ = [
     "fit_and_report",
     "extract_answer",
     "is_correct",
+    "same_answer",
 ]
 
 
@@ -361,8 +371,10 @@ def __getattr__(name):
     """Lazy-load EarlyStopper / ZeltStoppingCriteria (needs torch)."""
     if name == "EarlyStopper":
         from .core import EarlyStopper
+
         return EarlyStopper
     if name == "ZeltStoppingCriteria":
         from .core import ZeltStoppingCriteria
+
         return ZeltStoppingCriteria
     raise AttributeError(f"module 'zelt' has no attribute {name!r}")

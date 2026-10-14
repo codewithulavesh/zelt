@@ -13,27 +13,34 @@ High-level Zelt / EarlyStop API — designed for zero-friction use.
 
 That's it. 100% local, no API keys, mathematically risk-controlled.
 """
-import os
+
 import json
+import os
 import time
-import math
-from typing import Generator, List, Union
+from typing import Generator, List
 
 _BUNDLED_DECIDER = os.path.join(os.path.dirname(__file__), "data", "pretrained_decider.joblib")
-_BUNDLED_DATA    = os.path.join(os.path.dirname(__file__), "data", "gsm8k_real_deepseek_r1.jsonl")
-_DEFAULT_MODEL   = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
+_BUNDLED_DATA = os.path.join(os.path.dirname(__file__), "data", "gsm8k_real_deepseek_r1.jsonl")
+_DEFAULT_MODEL = "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B"
 
 # ── ANSI colors ─────────────────────────────────────────────────────────────
-_RESET = "\033[0m"; _BOLD = "\033[1m"; _GREEN = "\033[92m"
-_CYAN  = "\033[96m"; _YELLOW = "\033[93m"; _DIM = "\033[2m"
+_RESET = "\033[0m"
+_BOLD = "\033[1m"
+_GREEN = "\033[92m"
+_CYAN = "\033[96m"
+_YELLOW = "\033[93m"
+_DIM = "\033[2m"
 
-def _c(text, *codes): return "".join(codes) + str(text) + _RESET
+
+def _c(text, *codes):
+    return "".join(codes) + str(text) + _RESET
 
 
 class StreamChunk:
     """
     Event yielded during zt.stream(question).
     """
+
     def __init__(
         self,
         text: str = "",
@@ -44,14 +51,14 @@ class StreamChunk:
         stopped: bool = False,
         answer: str | None = None,
     ):
-        self.text        = text
+        self.text = text
         self.token_count = token_count
-        self.is_probe    = is_probe
-        self.probe       = probe
-        self.score       = score
-        self.confidence  = probe.get("gm", 0.0) if probe else (score or 0.0)
-        self.stopped     = stopped
-        self.answer      = answer
+        self.is_probe = is_probe
+        self.probe = probe
+        self.score = score
+        self.confidence = probe.get("gm", 0.0) if probe else (score or 0.0)
+        self.stopped = stopped
+        self.answer = answer
 
     def __str__(self):
         return self.text
@@ -69,23 +76,29 @@ class EarlyStopResult:
     Return value from Zelt.ask(). Behaves like a string (the final answer),
     but carries full metadata, cost calculations, carbon tracking, and probe traces.
     """
+
     def __init__(self, answer, tokens, full_est, stopped, probes, scores, elapsed, question=None):
-        self.question     = question
-        self.answer       = answer
-        self.tokens       = tokens
-        self.full_est     = full_est          # estimated full-CoT token count
-        self.stopped      = stopped           # True if early exit fired
-        self.probes       = probes
-        self.scores       = scores            # P(correct) per probe
-        self.elapsed      = elapsed           # wall-clock seconds
-        self.saved_pct    = 100 * (1 - tokens / max(full_est, 1)) if stopped else 0.0
+        self.question = question
+        self.answer = answer
+        self.tokens = tokens
+        self.full_est = full_est  # estimated full-CoT token count
+        self.stopped = stopped  # True if early exit fired
+        self.probes = probes
+        self.scores = scores  # P(correct) per probe
+        self.elapsed = elapsed  # wall-clock seconds
+        self.saved_pct = 100 * (1 - tokens / max(full_est, 1)) if stopped else 0.0
         self.tokens_saved = max(full_est - tokens, 0) if stopped else 0
 
     def cost_saved(self, price_per_1m_tokens: float = 2.0) -> float:
         """Estimated dollars saved based on output token pricing."""
         return (self.tokens_saved / 1_000_000.0) * price_per_1m_tokens
 
-    def carbon_saved(self, g_co2_per_kwh: float = 385.0, watts_per_device: float = 45.0, tokens_per_sec: float = 35.0) -> float:
+    def carbon_saved(
+        self,
+        g_co2_per_kwh: float = 385.0,
+        watts_per_device: float = 45.0,
+        tokens_per_sec: float = 35.0,
+    ) -> float:
         """Estimated grams of CO2 emissions saved by skipping reasoning tokens."""
         if self.tokens_saved <= 0 or tokens_per_sec <= 0:
             return 0.0
@@ -117,23 +130,34 @@ class EarlyStopResult:
             f.write(self.to_json())
 
     # Makes `print(result)` and `str(result)` return the answer
-    def __str__(self):  return str(self.answer)
-    def __repr__(self): return f"ZeltResult(answer={self.answer!r}, saved={self.saved_pct:.1f}%)"
+    def __str__(self):
+        return str(self.answer)
+
+    def __repr__(self):
+        return f"ZeltResult(answer={self.answer!r}, saved={self.saved_pct:.1f}%)"
 
     def summary(self) -> str:
         lines = [
             _c("─" * 52, _DIM),
             f"  {_c('Answer', _BOLD, _GREEN)}   : {_c(self.answer, _BOLD)}",
             f"  {_c('Tokens', _BOLD)}   : {self.tokens}"
-            + (f"  {_c(f'(saved {self.saved_pct:.1f}%)', _GREEN)}" if self.stopped else "  (full CoT)"),
+            + (
+                f"  {_c(f'(saved {self.saved_pct:.1f}%)', _GREEN)}"
+                if self.stopped
+                else "  (full CoT)"
+            ),
             f"  {_c('Stopped', _BOLD)}  : {_c('YES ⚡', _GREEN) if self.stopped else _c('NO (ran full)', _DIM)}",
             f"  {_c('Time', _BOLD)}     : {self.elapsed:.2f}s",
-            f"  {_c('Cost Saved', _BOLD)}: ${_c(f'{self.cost_saved():.5f}', _GREEN)}" if self.stopped else f"  {_c('Cost Saved', _BOLD)}: $0.00",
+            f"  {_c('Cost Saved', _BOLD)}: ${_c(f'{self.cost_saved():.5f}', _GREEN)}"
+            if self.stopped
+            else f"  {_c('Cost Saved', _BOLD)}: $0.00",
         ]
         if self.probes:
             last = self.probes[-1]
             score = self.scores[-1] if self.scores is not None and len(self.scores) else 0.0
-            lines.append(f"  {_c('Confidence', _BOLD)}: gm={last['gm']:.3f}  P(correct)={score:.3f}")
+            lines.append(
+                f"  {_c('Confidence', _BOLD)}: gm={last['gm']:.3f}  P(correct)={score:.3f}"
+            )
         lines.append(_c("─" * 52, _DIM))
         return "\n".join(lines)
 
@@ -143,7 +167,9 @@ class EarlyStopResult:
         rows.append(_c("  " + "─" * 46, _DIM))
         for p, s in zip(self.probes, self.scores if self.scores is not None else []):
             marker = _c(" ← STOP", _GREEN) if p is self.probes[-1] and self.stopped else ""
-            rows.append(f"  {p['t']:4d} | {s:.3f}      | {p['gm']:.3f} | {p.get('ent', 0):.2f} | {p.get('ans')}{marker}")
+            rows.append(
+                f"  {p['t']:4d} | {s:.3f}      | {p['gm']:.3f} | {p.get('ent', 0):.2f} | {p.get('ans')}{marker}"
+            )
         return "\n".join(rows)
 
 
@@ -151,17 +177,24 @@ class BatchResult:
     """
     Collection of EarlyStopResult instances with aggregate statistics and telemetry.
     """
+
     def __init__(self, results: List[EarlyStopResult], total_time: float):
-        self.results            = results
-        self.total_time         = total_time
-        self.n                  = len(results)
-        self.stopped_count      = sum(1 for r in results if r.stopped)
-        self.stop_rate_pct      = (100.0 * self.stopped_count / self.n) if self.n else 0.0
-        self.total_tokens       = sum(r.tokens for r in results)
-        self.total_full_est     = sum(r.full_est for r in results)
+        self.results = results
+        self.total_time = total_time
+        self.n = len(results)
+        self.stopped_count = sum(1 for r in results if r.stopped)
+        self.stop_rate_pct = (100.0 * self.stopped_count / self.n) if self.n else 0.0
+        self.total_tokens = sum(r.tokens for r in results)
+        self.total_full_est = sum(r.full_est for r in results)
         self.total_saved_tokens = sum(r.tokens_saved for r in results)
-        self.saved_pct          = (100.0 * self.total_saved_tokens / max(self.total_full_est, 1)) if self.total_full_est else 0.0
-        self.speedup            = (self.total_full_est / max(self.total_tokens, 1)) if self.total_tokens else 1.0
+        self.saved_pct = (
+            (100.0 * self.total_saved_tokens / max(self.total_full_est, 1))
+            if self.total_full_est
+            else 0.0
+        )
+        self.speedup = (
+            (self.total_full_est / max(self.total_tokens, 1)) if self.total_tokens else 1.0
+        )
 
     def cost_saved(self, price_per_1m_tokens: float = 2.0) -> float:
         return (self.total_saved_tokens / 1_000_000.0) * price_per_1m_tokens
@@ -198,7 +231,7 @@ class BatchResult:
             "cost_saved_usd": round(self.cost_saved(), 6),
             "carbon_saved_grams": round(self.carbon_saved(), 4),
             "total_time_seconds": round(self.total_time, 2),
-            "results": [r.to_dict() for r in self.results]
+            "results": [r.to_dict() for r in self.results],
         }
 
     def save(self, path: str):
@@ -227,8 +260,19 @@ class BatchResult:
 
 class CompareResult:
     """Side-by-side comparison between full unstopped reasoning and Zelt early-exit."""
-    def __init__(self, question, full_answer, early_answer, full_tokens, early_tokens,
-                 full_time, early_time, stopped, full_est=None):
+
+    def __init__(
+        self,
+        question,
+        full_answer,
+        early_answer,
+        full_tokens,
+        early_tokens,
+        full_time,
+        early_time,
+        stopped,
+        full_est=None,
+    ):
         self.question = question
         self.full_answer = full_answer
         self.early_answer = early_answer
@@ -238,9 +282,14 @@ class CompareResult:
         self.saved_pct = 100 * (1 - early_tokens / max(full_tokens, 1)) if stopped else 0.0
         self.full_time = full_time
         self.early_time = early_time
-        self.speedup = (full_time / max(early_time, 0.001)) if (early_time >= 0.05 and full_time >= 0.05) else (full_tokens / max(early_tokens, 1))
+        self.speedup = (
+            (full_time / max(early_time, 0.001))
+            if (early_time >= 0.05 and full_time >= 0.05)
+            else (full_tokens / max(early_tokens, 1))
+        )
         self.stopped = stopped
         from .answers import is_correct
+
         self.match = is_correct(str(early_answer), str(full_answer))
 
     def summary(self) -> str:
@@ -277,6 +326,7 @@ class CompareResult:
 
 class EvaluationResult:
     """Benchmark evaluation report across a dataset of reasoning problems."""
+
     def __init__(self, metrics: dict):
         self.metrics = metrics
         for k, v in metrics.items():
@@ -352,26 +402,34 @@ class EarlyStop:
         verbose: bool = True,
         lazy: bool = True,
     ):
-        self._model_name  = model
-        self.backend      = backend.lower()
-        self.base_url     = base_url
-        self._alpha       = alpha
-        self._delta       = delta
-        self._chunk       = chunk
-        self.verbose      = verbose
-        self._engine      = None
-        self._decider     = None
+        self._model_name = model
+        self.backend = backend.lower()
+        self.base_url = base_url
+        self._alpha = alpha
+        self._delta = delta
+        self._chunk = chunk
+        self.verbose = verbose
+        self._engine = None
+        self._decider = None
 
         path = decider_path or _BUNDLED_DECIDER
         if os.path.exists(path):
             from .decider import StopDecider
+
             self._decider = StopDecider.load(path)
             if self.verbose:
                 tau = self._decider.tau
-                print(_c(f"[zelt] Loaded decider  (tau={tau}, harm ≤ {alpha:.0%}, conf {1-delta:.0%})", _DIM))
+                print(
+                    _c(
+                        f"[zelt] Loaded decider  (tau={tau}, harm ≤ {alpha:.0%}, conf {1 - delta:.0%})",
+                        _DIM,
+                    )
+                )
         else:
             if self.verbose:
-                print(_c("[zelt] No pretrained decider found — call .fit() before asking.", _YELLOW))
+                print(
+                    _c("[zelt] No pretrained decider found — call .fit() before asking.", _YELLOW)
+                )
 
         if not lazy:
             self._load_engine()
@@ -382,12 +440,14 @@ class EarlyStop:
 
         if self.backend == "ollama":
             from .adapters import OllamaAdapter
+
             url = self.base_url or "http://localhost:11434"
             self._engine = OllamaAdapter(model=self._model_name, base_url=url, chunk=self._chunk)
             if self.verbose:
                 print(_c(f"[zelt] Connected to Ollama backend at {url}", _GREEN))
         elif self.backend == "vllm":
             from .adapters import VLLMAdapter
+
             url = self.base_url or "http://localhost:8000"
             self._engine = VLLMAdapter(model=self._model_name, base_url=url, chunk=self._chunk)
             if self.verbose:
@@ -395,6 +455,7 @@ class EarlyStop:
         else:
             try:
                 from .core import EarlyStopper
+
                 if self.verbose:
                     print(_c(f"[zelt] Loading model: {self._model_name} …", _DIM))
                 self._engine = EarlyStopper(self._model_name, chunk=self._chunk)
@@ -403,10 +464,21 @@ class EarlyStop:
                     print(_c(f"[zelt] Model ready on {dev}", _GREEN))
             except (ImportError, ModuleNotFoundError) as err:
                 from .adapters import FallbackEngine
+
                 self._engine = FallbackEngine(model=self._model_name, chunk=self._chunk)
                 if self.verbose:
-                    print(_c(f"[zelt] PyTorch not detected ({err}). Using lightweight CPU engine.", _YELLOW))
-                    print(_c("       To enable full GPU/MPS inference: pip install 'zelt[model]'", _DIM))
+                    print(
+                        _c(
+                            f"[zelt] PyTorch not detected ({err}). Using lightweight CPU engine.",
+                            _YELLOW,
+                        )
+                    )
+                    print(
+                        _c(
+                            "       To enable full GPU/MPS inference: pip install 'zelt[model]'",
+                            _DIM,
+                        )
+                    )
 
     def ask(self, question: str, verbose: bool | None = None) -> EarlyStopResult:
         """Run early-exit inference on question. Returns an EarlyStopResult."""
@@ -416,6 +488,7 @@ class EarlyStop:
 
         t0 = time.time()
         from .decider import make_stop_fn
+
         out = self._engine.run(question, stop_fn=make_stop_fn(self._decider))
         elapsed = time.time() - t0
 
@@ -425,14 +498,14 @@ class EarlyStop:
             scores = list(self._decider.score(out["probes"]))
 
         result = EarlyStopResult(
-            question = question,
-            answer   = out["answer"],
-            tokens   = out["tokens"],
-            full_est = full_est,
-            stopped  = out["stopped"],
-            probes   = out["probes"],
-            scores   = scores,
-            elapsed  = elapsed,
+            question=question,
+            answer=out["answer"],
+            tokens=out["tokens"],
+            full_est=full_est,
+            stopped=out["stopped"],
+            probes=out["probes"],
+            scores=scores,
+            elapsed=elapsed,
         )
 
         show = verbose if verbose is not None else self.verbose
@@ -472,6 +545,7 @@ class EarlyStop:
         self._load_engine()
 
         from .decider import make_stop_fn
+
         stop_fn = make_stop_fn(self._decider)
         t0 = time.time()
         probes = []
@@ -490,12 +564,12 @@ class EarlyStop:
                 elif ev["type"] == "result":
                     final_res = ev
                     yield StreamChunk(
-                        stopped=ev["stopped"],
-                        answer=ev["answer"],
-                        token_count=ev["tokens"]
+                        stopped=ev["stopped"], answer=ev["answer"], token_count=ev["tokens"]
                     )
             elapsed = time.time() - t0
-            full_est = final_res["tokens"] if not final_res["stopped"] else int(final_res["tokens"] / 0.62)
+            full_est = (
+                final_res["tokens"] if not final_res["stopped"] else int(final_res["tokens"] / 0.62)
+            )
             scores = list(self._decider.score(probes)) if probes and self._decider else None
             return EarlyStopResult(
                 question=question,
@@ -505,12 +579,14 @@ class EarlyStop:
                 stopped=final_res["stopped"],
                 probes=probes,
                 scores=scores,
-                elapsed=elapsed
+                elapsed=elapsed,
             )
         else:
             # Fallback for adapters without granular stream
             res = self.ask(question, verbose=False)
-            yield StreamChunk(text=res.answer, token_count=res.tokens, stopped=res.stopped, answer=res.answer)
+            yield StreamChunk(
+                text=res.answer, token_count=res.tokens, stopped=res.stopped, answer=res.answer
+            )
             return res
 
     def batch(self, questions: List[str], verbose: bool = True) -> BatchResult:
@@ -524,7 +600,9 @@ class EarlyStop:
             results.append(res)
             if verbose:
                 status = "⚡ STOP" if res.stopped else "FULL"
-                print(f"  [{i+1}/{len(questions)}] {status} | tokens={res.tokens} (saved {res.saved_pct:.0f}%) | ans: {res.answer}")
+                print(
+                    f"  [{i + 1}/{len(questions)}] {status} | tokens={res.tokens} (saved {res.saved_pct:.0f}%) | ans: {res.answer}"
+                )
 
         total_time = time.time() - t0
         batch_res = BatchResult(results, total_time)
@@ -535,6 +613,7 @@ class EarlyStop:
     def serve(self, host: str = "127.0.0.1", port: int = 8000):
         """Launch the interactive web UI dashboard."""
         from .web import run_server
+
         run_server(self, host=host, port=port)
 
     def __call__(self, question: str, **kwargs) -> EarlyStopResult:
@@ -550,7 +629,7 @@ class EarlyStop:
         seed: int = 0,
     ) -> "EarlyStop":
         """Train + calibrate decider on recorded trajectories."""
-        from .decider import load_rows, fit_and_report, StopDecider
+        from .decider import StopDecider, fit_and_report, load_rows
 
         if isinstance(data, str):
             rows = load_rows(data)
@@ -558,8 +637,9 @@ class EarlyStop:
             rows = list(data)
 
         print(_c(f"[zelt] Fitting on {len(rows)} examples …", _DIM))
-        rep = fit_and_report(rows, outdir, alpha=self._alpha, delta=self._delta,
-                             kind=kind, seed=seed, verbose=True)
+        rep = fit_and_report(
+            rows, outdir, alpha=self._alpha, delta=self._delta, kind=kind, seed=seed, verbose=True
+        )
         self._decider = StopDecider.load(os.path.join(outdir, "decider.joblib"))
         tau = rep["methods"]["learned"]["chosen_threshold"]
         print(_c(f"[zelt] Decider fitted. tau={tau}", _GREEN))
@@ -572,21 +652,31 @@ class EarlyStop:
     ) -> "EarlyStop":
         """Record full CoT trajectories for calibration."""
         from .answers import is_correct
+
         self._load_engine()
         os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
         done = set()
         if os.path.exists(out):
             with open(out) as f:
-                done = {json.loads(l)["idx"] for l in f if l.strip()}
+                done = {json.loads(line)["idx"] for line in f if line.strip()}
         with open(out, "a") as fo:
             for idx, (q, gold) in enumerate(questions):
                 if idx in done:
                     continue
                 r = self._engine.run(q)
-                row = dict(idx=idx, gold=gold, full_tokens=r["tokens"],
-                           full_ans=r["answer"], full_correct=is_correct(r["answer"], gold),
-                           probes=r["probes"], hit_max=r["tokens"] >= getattr(self._engine, "max_new", 2048))
-                fo.write(json.dumps(row) + "\n"); fo.flush()
+                row = dict(
+                    idx=idx,
+                    gold=gold,
+                    full_tokens=r["tokens"],
+                    full_ans=r["answer"],
+                    full_correct=is_correct(r["answer"], gold),
+                    probes=r["probes"],
+                    hit_max=r["tokens"] >= getattr(self._engine, "max_new", 2048),
+                )
+                fo.write(json.dumps(row) + "\n")
+                fo.flush()
+        return self
+
     def compare(self, question: str, verbose: bool = True) -> CompareResult:
         """Run Full CoT vs. Zelt Early-Exit side-by-side on the same question."""
         t0 = time.time()
@@ -634,8 +724,9 @@ class EarlyStop:
           - path to .jsonl file with 'question'/'gold' or trajectory format
           - list of dicts or (question, gold) tuples
         """
-        from .decider import load_rows, evaluate_policy
         from .answers import is_correct
+        from .decider import evaluate_policy, load_rows
+
         alpha = alpha or self._alpha
         delta = delta or self._delta
 
@@ -659,6 +750,7 @@ class EarlyStop:
             if self._decider is None:
                 if os.path.exists(_BUNDLED_DECIDER):
                     from .decider import StopDecider
+
                     self._decider = StopDecider.load(_BUNDLED_DECIDER)
                 else:
                     raise RuntimeError("No decider loaded. Call .fit() or pass decider_path.")
@@ -689,14 +781,26 @@ class EarlyStop:
                 gold = r.get("gold") if isinstance(r, dict) else r[1]
                 res = self.ask(q, verbose=False)
                 ok_early = is_correct(res.answer, gold)
-                ok_full = ok_early if not res.stopped else is_correct(res.answer, gold)
+                if isinstance(r, dict) and "full_ans" in r:
+                    ok_full = is_correct(r["full_ans"], gold)
+                elif isinstance(r, dict) and "full_correct" in r:
+                    ok_full = bool(r["full_correct"])
+                elif res.stopped and self._engine is not None and hasattr(self._engine, "run"):
+                    full_out = self._engine.run(q, stop_fn=None)
+                    ok_full = is_correct(full_out.get("answer", ""), gold)
+                else:
+                    ok_full = ok_early
+
                 if ok_full and not ok_early:
                     harm_count += 1
-                if ok_early: correct_early += 1
-                if ok_full: correct_full += 1
+                if ok_early:
+                    correct_early += 1
+                if ok_full:
+                    correct_full += 1
                 results.append(res)
             n = len(rows)
             from .decider import clopper_pearson_ucb
+
             ucb = clopper_pearson_ucb(harm_count, n, delta)
             tot_tok = sum(r.tokens for r in results)
             tot_full = sum(r.full_est for r in results)
@@ -767,6 +871,7 @@ class EarlyStop:
 def _get_version():
     try:
         from importlib.metadata import version
+
         return version("zelt")
     except Exception:
         return "0.2.0"

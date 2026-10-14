@@ -1,36 +1,48 @@
 """Forward from zelt for backward compatibility."""
+
+import zelt
 from zelt import (
-    reduce_compute_thinking,
-    ask,
-    stream,
-    batch,
-    Zelt,
-    ZeltResult,
+    BatchResult,
+    CompareResult,
     EarlyStop,
     EarlyStopResult,
-    StreamChunk,
-    BatchResult,
+    EvaluationResult,
     StopDecider,
-    make_stop_fn,
+    StreamChunk,
+    __version__,
+    accelerate,
+    ask,
+    batch,
+    calibrate,
+    compare,
+    evaluate,
+    extract_answer,
     featurize,
     fit_and_report,
-    extract_answer,
+    from_ollama,
+    from_vllm,
     is_correct,
+    list_presets,
+    make_stop_fn,
+    risk_report,
+    same_answer,
+    stream,
+    token_budget,
 )
+from zelt.core import EarlyStopper
 
-__version__ = "0.2.0"
+# Aliases
+Zelt = EarlyStop
+ZeltResult = EarlyStopResult
+reduce_compute_thinking = ask
 
 __all__ = [
-    "reduce_compute_thinking",
-    "ask",
-    "stream",
-    "batch",
-    "Zelt",
-    "ZeltResult",
     "EarlyStop",
     "EarlyStopResult",
     "StreamChunk",
     "BatchResult",
+    "CompareResult",
+    "EvaluationResult",
     "EarlyStopper",
     "StopDecider",
     "make_stop_fn",
@@ -38,11 +50,25 @@ __all__ = [
     "fit_and_report",
     "extract_answer",
     "is_correct",
+    "same_answer",
+    "ask",
+    "stream",
+    "batch",
+    "compare",
+    "evaluate",
+    "calibrate",
+    "accelerate",
+    "list_presets",
+    "from_ollama",
+    "from_vllm",
+    "token_budget",
+    "risk_report",
+    "Zelt",
+    "ZeltResult",
+    "reduce_compute_thinking",
+    "__version__",
 ]
 
 
-def __getattr__(name):
-    if name == "EarlyStopper":
-        from .core import EarlyStopper
-        return EarlyStopper
-    raise AttributeError(f"module 'earlystop' has no attribute {name!r}")
+def __getattr__(name: str):
+    return getattr(zelt, name)

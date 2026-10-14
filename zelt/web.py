@@ -2,12 +2,11 @@
 Interactive Web UI & Dashboard for Zelt.
 Zero external server dependencies (pure Python http.server + Server-Sent Events).
 """
-import os
+
 import json
-import time
+import os
 import urllib.parse
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 HTML_PAGE = """<!DOCTYPE html>
 <html lang="en">
@@ -37,7 +36,7 @@ HTML_PAGE = """<!DOCTYPE html>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background: var(--bg);
-      background-image: 
+      background-image:
         radial-gradient(circle at 15% 20%, rgba(16, 185, 129, 0.08) 0%, transparent 40%),
         radial-gradient(circle at 85% 60%, rgba(6, 182, 212, 0.08) 0%, transparent 40%);
       color: var(--text);
@@ -336,7 +335,7 @@ HTML_PAGE = """<!DOCTYPE html>
           <span style="font-size: 0.75rem; color: var(--text-muted);">GSM8K / Math / Logic</span>
         </div>
         <textarea id="questionInput" placeholder="Enter a reasoning question..."></textarea>
-        
+
         <div class="preset-container">
           <button class="preset-btn" onclick="setPreset('Natalia sold clips to 48 friends and 24 family members. How many clips did she sell?')">Example 1: Paper Clips</button>
           <button class="preset-btn" onclick="setPreset('How many cups of flour are needed for 3 dozen cookies if each dozen takes 3.666 cups?')">Example 2: Cookie Flour</button>
@@ -558,6 +557,7 @@ class ZeltHTTPHandler(BaseHTTPRequestHandler):
 
 def run_server(zelt_instance, host="127.0.0.1", port=8000):
     """Start local web dashboard."""
+
     def handler_factory(*args, **kwargs):
         return ZeltHTTPHandler(*args, zelt_instance=zelt_instance, **kwargs)
 

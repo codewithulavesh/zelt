@@ -13,16 +13,38 @@ i.e. a bound on the accuracy we can lose by stopping early.
 
 Everything here is pure numpy/sklearn (no torch), so it works on recorded data.
 """
-import json, math, os, csv, random
+
+import csv
+import json
+import math
+import os
+import random
+
 import numpy as np
 
 from .answers import is_correct, same_answer
 
-FEATURES = ["gm", "mean", "minp", "ent", "logt", "gm_s2", "stable", "run",
-            "changes", "dgm", "n_probes",
-            # v2 enhanced features
-            "d2gm", "run_x_gm", "gm_max", "ans_stable_frac",
-            "ent_trend", "minp_s2", "gm_accel_pos"]
+FEATURES = [
+    "gm",
+    "mean",
+    "minp",
+    "ent",
+    "logt",
+    "gm_s2",
+    "stable",
+    "run",
+    "changes",
+    "dgm",
+    "n_probes",
+    # v2 enhanced features
+    "d2gm",
+    "run_x_gm",
+    "gm_max",
+    "ans_stable_frac",
+    "ent_trend",
+    "minp_s2",
+    "gm_accel_pos",
+]
 
 
 # ------------------------------------------------------------------ features
@@ -41,11 +63,14 @@ def featurize(probes):
         gm = float(p["gm"]) if ans is not None else 0.0
         ent = min(float(p.get("ent") or 0.0), 10.0)
         minp = float(p["minp"]) if ans is not None else 0.0
-        hist_gm.append(gm); hist_ent.append(ent); hist_minp.append(minp)
+        hist_gm.append(gm)
+        hist_ent.append(ent)
+        hist_minp.append(minp)
         gm_max = max(gm_max, gm)
 
         if prev is not None and ans is not None and same_answer(ans, prev):
-            run += 1; n_stable += 1
+            run += 1
+            n_stable += 1
         else:
             if prev is not None and ans is not None:
                 changes += 1
@@ -74,15 +99,33 @@ def featurize(probes):
         # gm_accel_pos: 1 if confidence is accelerating upward
         gm_accel_pos = float(d2gm > 0 and dgm > 0)
 
-        X.append([gm, float(p["mean"]), minp, ent, math.log(max(p["t"], 1)),
-                  gm_s2, float(run > 0), float(min(run, 10)),
-                  float(min(changes, 10)), dgm, float(k + 1),
-                  # v2 features
-                  d2gm, run_x_gm, gm_max, ans_stable_frac,
-                  ent_trend, minp_s2, gm_accel_pos])
+        X.append(
+            [
+                gm,
+                float(p["mean"]),
+                minp,
+                ent,
+                math.log(max(p["t"], 1)),
+                gm_s2,
+                float(run > 0),
+                float(min(run, 10)),
+                float(min(changes, 10)),
+                dgm,
+                float(k + 1),
+                # v2 features
+                d2gm,
+                run_x_gm,
+                gm_max,
+                ans_stable_frac,
+                ent_trend,
+                minp_s2,
+                gm_accel_pos,
+            ]
+        )
         if ans is not None:
             prev = ans
-        prev_gm = gm; prev_dgm = dgm
+        prev_gm = gm
+        prev_dgm = dgm
     return np.array(X, dtype=float).reshape(-1, len(FEATURES))
 
 
@@ -109,25 +152,39 @@ class StopDecider:
         self.consensus_k = consensus_k
 
     def _make(self):
+        from sklearn.linear_model import LogisticRegression
         from sklearn.pipeline import Pipeline
         from sklearn.preprocessing import StandardScaler
-        from sklearn.linear_model import LogisticRegression
+
         if self.kind == "logreg":
-            return Pipeline([("sc", StandardScaler()),
-                             ("lr", LogisticRegression(C=0.5, max_iter=5000, solver="lbfgs"))])
-        from sklearn.ensemble import HistGradientBoostingClassifier
+            return Pipeline(
+                [
+                    ("sc", StandardScaler()),
+                    ("lr", LogisticRegression(C=0.5, max_iter=5000, solver="lbfgs")),
+                ]
+            )
         from sklearn.calibration import CalibratedClassifierCV
+        from sklearn.ensemble import HistGradientBoostingClassifier
+
         return CalibratedClassifierCV(
             HistGradientBoostingClassifier(
-                max_depth=4, learning_rate=0.04, max_iter=400,
-                min_samples_leaf=8, l2_regularization=0.1),
-            method="isotonic", cv=3)
+                max_depth=4,
+                learning_rate=0.04,
+                max_iter=400,
+                min_samples_leaf=8,
+                l2_regularization=0.1,
+            ),
+            method="isotonic",
+            cv=3,
+        )
 
     def fit(self, examples):
         X, y = build_xy(examples)
         if len(set(y.tolist())) < 2:
-            raise ValueError("Training probes contain only one class (all correct or all wrong); "
-                             "need more/varied data.")
+            raise ValueError(
+                "Training probes contain only one class (all correct or all wrong); "
+                "need more/varied data."
+            )
         self.model = self._make().fit(X, y)
         self.meta["n_train_probes"] = int(len(y))
         self.meta["train_probe_acc"] = float(y.mean())
@@ -143,12 +200,22 @@ class StopDecider:
 
     def save(self, path):
         import joblib
-        joblib.dump(dict(kind=self.kind, model=self.model, tau=self.tau, meta=self.meta,
-                         consensus_k=self.consensus_k), path)
+
+        joblib.dump(
+            dict(
+                kind=self.kind,
+                model=self.model,
+                tau=self.tau,
+                meta=self.meta,
+                consensus_k=self.consensus_k,
+            ),
+            path,
+        )
 
     @staticmethod
     def load(path):
         import joblib
+
         d = joblib.load(path)
         s = StopDecider(d["kind"], consensus_k=d.get("consensus_k", 1))
         s.model, s.tau, s.meta = d["model"], d["tau"], d["meta"]
@@ -177,6 +244,7 @@ def make_stop_fn(decider, tau=None, consensus_k=None):
         # Score only needs to pass on the latest probe (scores include history)
         scores = decider.score(probes)
         return float(scores[-1]) >= tau
+
     return stop
 
 
@@ -191,13 +259,30 @@ def simulate(examples, seqs, tau):
                 hit = k
                 break
         if hit is None:
-            tok, ans, ovh, stopped = ex["full_tokens"], ex["full_ans"], sum(q["ptok"] for q in pr), False
+            tok, ans, ovh, stopped = (
+                ex["full_tokens"],
+                ex["full_ans"],
+                sum(q["ptok"] for q in pr),
+                False,
+            )
         else:
-            tok, ans, ovh, stopped = pr[hit]["t"], pr[hit]["ans"], sum(q["ptok"] for q in pr[:hit + 1]), True
+            tok, ans, ovh, stopped = (
+                pr[hit]["t"],
+                pr[hit]["ans"],
+                sum(q["ptok"] for q in pr[: hit + 1]),
+                True,
+            )
         ok = is_correct(ans, ex["gold"])
-        res.append(dict(tokens=tok, overhead=ovh, ok=ok, stopped=stopped,
-                        harm=bool(ex["full_correct"] and not ok),
-                        help=bool((not ex["full_correct"]) and ok)))
+        res.append(
+            dict(
+                tokens=tok,
+                overhead=ovh,
+                ok=ok,
+                stopped=stopped,
+                harm=bool(ex["full_correct"] and not ok),
+                help=bool((not ex["full_correct"]) and ok),
+            )
+        )
     return res
 
 
@@ -208,19 +293,26 @@ def summarize(res, examples):
     tok = sum(r["tokens"] for r in res) / n
     ovh = sum(r["overhead"] for r in res) / n
     acc = sum(r["ok"] for r in res) / n
-    return dict(n=n, acc=acc, full_acc=full_acc, acc_delta=acc - full_acc,
-                tokens=tok, full_tokens=full_tok,
-                reduction_pct=100 * (1 - tok / full_tok),
-                reduction_incl_probe_pct=100 * (1 - (tok + ovh) / full_tok),
-                stop_rate=sum(r["stopped"] for r in res) / n,
-                harm_rate=sum(r["harm"] for r in res) / n,
-                help_rate=sum(r["help"] for r in res) / n)
+    return dict(
+        n=n,
+        acc=acc,
+        full_acc=full_acc,
+        acc_delta=acc - full_acc,
+        tokens=tok,
+        full_tokens=full_tok,
+        reduction_pct=100 * (1 - tok / full_tok),
+        reduction_incl_probe_pct=100 * (1 - (tok + ovh) / full_tok),
+        stop_rate=sum(r["stopped"] for r in res) / n,
+        harm_rate=sum(r["harm"] for r in res) / n,
+        help_rate=sum(r["help"] for r in res) / n,
+    )
 
 
 # ------------------------------------------------------------------ risk control
 def cp_upper(k, n, delta):
     """One-sided Clopper-Pearson upper bound on a binomial rate."""
     from scipy.stats import beta
+
     if n == 0 or k >= n:
         return 1.0
     return float(beta.ppf(1 - delta, k + 1, n - k))
@@ -254,9 +346,16 @@ def choose_tau(examples, seqs, grid, alpha, delta):
         res = simulate(examples, seqs, tau)
         k = sum(r["harm"] for r in res)
         ucb = cp_upper(k, n, delta)
-        table.append(dict(tau=float(tau), harm=k, harm_rate=k / n, ucb=ucb,
-                          reduction_pct=100 * (1 - sum(r["tokens"] for r in res) /
-                                               sum(e["full_tokens"] for e in examples))))
+        table.append(
+            dict(
+                tau=float(tau),
+                harm=k,
+                harm_rate=k / n,
+                ucb=ucb,
+                reduction_pct=100
+                * (1 - sum(r["tokens"] for r in res) / sum(e["full_tokens"] for e in examples)),
+            )
+        )
         if ucb <= alpha:
             best = float(tau)
         else:
@@ -276,6 +375,7 @@ def calibration_metrics(y, s, bins=10):
     out = dict(ece=float(ece), brier=float(np.mean((s - y) ** 2)))
     try:
         from sklearn.metrics import roc_auc_score
+
         out["auroc"] = float(roc_auc_score(y, s))
     except Exception:
         out["auroc"] = None
@@ -285,14 +385,18 @@ def calibration_metrics(y, s, bins=10):
 # ------------------------------------------------------------------ data helpers
 def load_rows(path):
     with open(path) as f:
-        return [json.loads(l) for l in f if l.strip()]
+        return [json.loads(line) for line in f if line.strip()]
 
 
 def split_examples(rows, seed=0, fracs=(0.5, 0.25, 0.25)):
     idx = list(range(len(rows)))
     random.Random(seed).shuffle(idx)
-    a = int(fracs[0] * len(rows)); b = a + int(fracs[1] * len(rows))
-    pick = lambda ids: [rows[i] for i in sorted(ids)]
+    a = int(fracs[0] * len(rows))
+    b = a + int(fracs[1] * len(rows))
+
+    def pick(ids):
+        return [rows[i] for i in sorted(ids)]
+
     return pick(idx[:a]), pick(idx[a:b]), pick(idx[b:])
 
 
@@ -308,14 +412,26 @@ def fit_and_report(rows, outdir, alpha=0.02, delta=0.1, kind="logreg", seed=0, v
     tau_grid = np.unique(np.concatenate([np.arange(0.50, 0.99, 0.01), [0.99, 0.995, 0.999]]))
     seq = {
         "learned": lambda exs: [dec.score(e["probes"]).tolist() for e in exs],
-        "confidence": lambda exs: [featurize(e["probes"])[:, FEATURES.index("gm_s2")].tolist() for e in exs],
+        "confidence": lambda exs: [
+            featurize(e["probes"])[:, FEATURES.index("gm_s2")].tolist() for e in exs
+        ],
         "fixed_budget": lambda exs: [[p["t"] for p in e["probes"]] for e in exs],
     }
     budgets = np.unique([p["t"] for e in cal for p in e["probes"]])
     grids = {"learned": tau_grid, "confidence": tau_grid, "fixed_budget": budgets}
 
-    report = dict(n_total=len(rows), n_train=len(train), n_cal=len(cal), n_test=len(test),
-                  alpha=alpha, delta=delta, kind=kind, methods={}, calibration={}, tables={})
+    report = dict(
+        n_total=len(rows),
+        n_train=len(train),
+        n_cal=len(cal),
+        n_test=len(test),
+        alpha=alpha,
+        delta=delta,
+        kind=kind,
+        methods={},
+        calibration={},
+        tables={},
+    )
     for m in ["fixed_budget", "confidence", "learned"]:
         tau, table = choose_tau(cal, seq[m](cal), grids[m], alpha, delta)
         report["tables"][m] = table
@@ -324,32 +440,52 @@ def fit_and_report(rows, outdir, alpha=0.02, delta=0.1, kind="logreg", seed=0, v
             res = simulate(test, test_seq, float("inf"))
         else:
             res = simulate(test, test_seq, tau)
-        s = summarize(res, test); s["chosen_threshold"] = tau
+        s = summarize(res, test)
+        s["chosen_threshold"] = tau
         report["methods"][m] = s
         if m == "learned":
             dec.tau = tau
     # naive (uncalibrated) learned stopper at a fixed 0.9, for contrast
-    s = summarize(simulate(test, seq["learned"](test), 0.9), test); s["chosen_threshold"] = 0.9
+    s = summarize(simulate(test, seq["learned"](test), 0.9), test)
+    s["chosen_threshold"] = 0.9
     report["methods"]["learned_naive_0.9"] = s
     report["methods"]["full_cot"] = dict(
-        acc=s["full_acc"], tokens=s["full_tokens"], reduction_pct=0.0, acc_delta=0.0,
-        stop_rate=0.0, harm_rate=0.0, n=len(test))
+        acc=s["full_acc"],
+        tokens=s["full_tokens"],
+        reduction_pct=0.0,
+        acc_delta=0.0,
+        stop_rate=0.0,
+        harm_rate=0.0,
+        n=len(test),
+    )
 
     # calibration quality of the confidence signals on held-out probes
     yt = np.concatenate([probe_labels(e) for e in test])
     st_learned = np.concatenate([dec.score(e["probes"]) for e in test])
     st_gm = np.concatenate([featurize(e["probes"])[:, 0] for e in test])
-    report["calibration"] = dict(learned=calibration_metrics(yt, st_learned),
-                                 raw_geo_mean_conf=calibration_metrics(yt, st_gm))
+    report["calibration"] = dict(
+        learned=calibration_metrics(yt, st_learned),
+        raw_geo_mean_conf=calibration_metrics(yt, st_gm),
+    )
 
     dec.meta.update(alpha=alpha, delta=delta, n_cal=len(cal))
     dec.save(os.path.join(outdir, "decider.joblib"))
     with open(os.path.join(outdir, "report.json"), "w") as f:
         json.dump(report, f, indent=2)
-    cols = ["method", "chosen_threshold", "acc", "acc_delta", "tokens", "reduction_pct",
-            "reduction_incl_probe_pct", "stop_rate", "harm_rate"]
+    cols = [
+        "method",
+        "chosen_threshold",
+        "acc",
+        "acc_delta",
+        "tokens",
+        "reduction_pct",
+        "reduction_incl_probe_pct",
+        "stop_rate",
+        "harm_rate",
+    ]
     with open(os.path.join(outdir, "summary.csv"), "w", newline="") as f:
-        w = csv.writer(f); w.writerow(cols)
+        w = csv.writer(f)
+        w.writerow(cols)
         for m, s in report["methods"].items():
             w.writerow([m] + [s.get(c, "") for c in cols[1:]])
     _plots(report, test, dec, outdir)
@@ -359,14 +495,21 @@ def fit_and_report(rows, outdir, alpha=0.02, delta=0.1, kind="logreg", seed=0, v
 
 
 def print_report(r):
-    print(f"\nExamples: train={r['n_train']} cal={r['n_cal']} test={r['n_test']}   "
-          f"risk bound: harm <= {r['alpha']} (conf {1 - r['delta']:.0%})")
-    print(f"{'method':<20}{'tau/B':>8}{'acc':>8}{'dAcc':>8}{'tokens':>9}{'reduce%':>9}{'w/probe%':>10}{'stop%':>7}{'harm%':>7}")
+    print(
+        f"\nExamples: train={r['n_train']} cal={r['n_cal']} test={r['n_test']}   "
+        f"risk bound: harm <= {r['alpha']} (conf {1 - r['delta']:.0%})"
+    )
+    print(
+        f"{'method':<20}{'tau/B':>8}{'acc':>8}{'dAcc':>8}{'tokens':>9}{'reduce%':>9}{'w/probe%':>10}{'stop%':>7}{'harm%':>7}"
+    )
     for m in ["full_cot", "fixed_budget", "confidence", "learned", "learned_naive_0.9"]:
-        s = r["methods"][m]; t = s.get("chosen_threshold")
-        print(f"{m:<20}{('-' if t is None else f'{t:.3g}'):>8}{s['acc']:>8.3f}{s['acc_delta']:>+8.3f}"
-              f"{s['tokens']:>9.1f}{s['reduction_pct']:>9.1f}{s.get('reduction_incl_probe_pct', 0):>10.1f}"
-              f"{100 * s['stop_rate']:>7.1f}{100 * s['harm_rate']:>7.1f}")
+        s = r["methods"][m]
+        t = s.get("chosen_threshold")
+        print(
+            f"{m:<20}{('-' if t is None else f'{t:.3g}'):>8}{s['acc']:>8.3f}{s['acc_delta']:>+8.3f}"
+            f"{s['tokens']:>9.1f}{s['reduction_pct']:>9.1f}{s.get('reduction_incl_probe_pct', 0):>10.1f}"
+            f"{100 * s['stop_rate']:>7.1f}{100 * s['harm_rate']:>7.1f}"
+        )
     c = r["calibration"]
     print("\nCalibration on held-out probes (lower ECE/Brier, higher AUROC = better):")
     for k, v in c.items():
@@ -375,7 +518,9 @@ def print_report(r):
 
 def _plots(report, test, dec, outdir):
     try:
-        import matplotlib; matplotlib.use("Agg")
+        import matplotlib
+
+        matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except ImportError:
         return
@@ -388,29 +533,45 @@ def _plots(report, test, dec, outdir):
                 sq = [dec.score(e["probes"]).tolist() for e in test]
             else:
                 sq = [featurize(e["probes"])[:, FEATURES.index("gm_s2")].tolist() for e in test]
-            s = summarize(simulate(test, sq, tau), test); xs.append(s["tokens"]); ys.append(s["acc"])
+            s = summarize(simulate(test, sq, tau), test)
+            xs.append(s["tokens"])
+            ys.append(s["acc"])
         ax[0].plot(xs, ys, marker=mk, color=col, label=m)
     bs = np.unique([p["t"] for e in test for p in e["probes"]])
     pts = []
     for B in bs[:: max(1, len(bs) // 15)]:
         sq = [[p["t"] for p in e["probes"]] for e in test]
-        s = summarize(simulate(test, sq, B), test); pts.append((s["tokens"], s["acc"]))
+        s = summarize(simulate(test, sq, B), test)
+        pts.append((s["tokens"], s["acc"]))
     if pts:
         ax[0].plot(*zip(*sorted(pts)), "^--", color="C2", label="fixed budget")
-    ax[0].scatter([full["tokens"]], [full["acc"]], c="k", marker="*", s=160, label="full CoT", zorder=5)
-    ax[0].set_xlabel("avg reasoning tokens"); ax[0].set_ylabel("accuracy")
-    ax[0].set_title("Accuracy vs tokens (test split)"); ax[0].grid(alpha=.3); ax[0].legend()
+    ax[0].scatter(
+        [full["tokens"]], [full["acc"]], c="k", marker="*", s=160, label="full CoT", zorder=5
+    )
+    ax[0].set_xlabel("avg reasoning tokens")
+    ax[0].set_ylabel("accuracy")
+    ax[0].set_title("Accuracy vs tokens (test split)")
+    ax[0].grid(alpha=0.3)
+    ax[0].legend()
     y = np.concatenate([probe_labels(e) for e in test])
-    for name, sc, col in [("learned", np.concatenate([dec.score(e["probes"]) for e in test]), "C0"),
-                          ("raw confidence", np.concatenate([featurize(e["probes"])[:, 0] for e in test]), "C1")]:
-        b = np.linspace(0, 1, 11); xs, ys = [], []
+    for name, sc, col in [
+        ("learned", np.concatenate([dec.score(e["probes"]) for e in test]), "C0"),
+        ("raw confidence", np.concatenate([featurize(e["probes"])[:, 0] for e in test]), "C1"),
+    ]:
+        b = np.linspace(0, 1, 11)
+        xs, ys = [], []
         for i in range(10):
             m = (sc >= b[i]) & (sc <= b[i + 1] if i == 9 else sc < b[i + 1])
             if m.sum() >= 5:
-                xs.append(sc[m].mean()); ys.append(y[m].mean())
+                xs.append(sc[m].mean())
+                ys.append(y[m].mean())
         ax[1].plot(xs, ys, "o-", color=col, label=name)
-    ax[1].plot([0, 1], [0, 1], "k--", alpha=.5)
-    ax[1].set_xlabel("predicted P(correct)"); ax[1].set_ylabel("observed accuracy")
-    ax[1].set_title("Reliability diagram (probe answers)"); ax[1].grid(alpha=.3); ax[1].legend()
-    fig.tight_layout(); fig.savefig(os.path.join(outdir, "report.png"), dpi=150)
+    ax[1].plot([0, 1], [0, 1], "k--", alpha=0.5)
+    ax[1].set_xlabel("predicted P(correct)")
+    ax[1].set_ylabel("observed accuracy")
+    ax[1].set_title("Reliability diagram (probe answers)")
+    ax[1].grid(alpha=0.3)
+    ax[1].legend()
+    fig.tight_layout()
+    fig.savefig(os.path.join(outdir, "report.png"), dpi=150)
     plt.close(fig)

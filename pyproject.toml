@@ -80,7 +80,6 @@ include = ["zelt*", "earlystop*"]
 
 [tool.setuptools.package-data]
 zelt = ["data/*", "py.typed"]
-earlystop = ["data/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

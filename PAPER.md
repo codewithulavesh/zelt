@@ -203,7 +203,7 @@ from zelt import reduce_compute_thinking, ask, stream, batch, Zelt
 # 1. Primary compute-reduction entrypoint
 result = reduce_compute_thinking("What is 17 * 23?")
 print("Answer:", result)  # "391"
-print(result.summary())   # Displays tokens saved (37.9%), speedup (1.61x), cost saved
+print(result.summary())  # Displays tokens saved (37.9%), speedup (1.61x), cost saved
 
 # 2. Real-time streaming generator
 for chunk in stream("What is 17 * 23?"):
@@ -228,7 +228,11 @@ Zelt includes native streaming adapters for external inference engines, enabling
 zt = Zelt(backend="ollama", model="deepseek-r1:1.5b")
 
 # Connect to local vLLM / TGI OpenAI-compatible server
-zt = Zelt(backend="vllm", model="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", base_url="http://localhost:8000")
+zt = Zelt(
+    backend="vllm",
+    model="deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B",
+    base_url="http://localhost:8000",
+)
 ```
 
 ### 6.3 Interactive Web Studio

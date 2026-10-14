@@ -2,7 +2,7 @@
 Tests for new production-grade factory functions added in v0.2.1:
 from_ollama, from_vllm, token_budget, risk_report
 """
-import pytest
+
 import zelt
 from zelt import EarlyStop, EarlyStopResult
 
@@ -98,6 +98,7 @@ class TestRiskReport:
 
 class TestFactoriesInAll:
     """Ensure all new functions are exported in __all__."""
+
     def test_from_ollama_in_all(self):
         assert "from_ollama" in zelt.__all__
 

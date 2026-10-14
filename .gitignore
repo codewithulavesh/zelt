@@ -28,6 +28,9 @@ data/*.jsonl
 data/*.csv
 *.log
 *.tmp
+.coverage
+.coverage.*
+htmlcov/
 
 # Agent cache
 .agent-cache/
