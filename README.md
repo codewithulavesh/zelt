@@ -1,85 +1,78 @@
-# ⚡ Zelt
+<div align="center">
 
-### Stop reasoning LLMs from overthinking.
+# Zelt: Stop Reasoning LLMs From Overthinking
 
-**Calibrated, risk-controlled early exit for chain-of-thought models.**
-Cut tokens and latency by stopping generation the moment the answer is ready, with a statistical bound on accuracy loss.
+### Calibrated, risk-controlled early exit for reasoning models.
 
-[![PyPI](https://img.shields.io/pypi/v/zelt-ai.svg?color=10b981&label=PyPI)](https://pypi.org/project/zelt-ai/)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-3b82f6.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-f59e0b.svg)](LICENSE)
-[![Runs locally](https://img.shields.io/badge/runs-100%25%20local-8b5cf6.svg)](#-installation)
-[![Code Style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![Docker Ready](https://img.shields.io/badge/docker-ready-06b6d4.svg)](Dockerfile)
+**Get the same answer in fewer tokens. Stop thinking the moment the answer is ready.**
 
-[**Quickstart**](#-quickstart) ·
-[**How it works**](#-how-it-works) ·
-[**Benchmarks**](#-measured-performance) ·
-[**API**](#-python-api) ·
-[**CLI**](#-cli-reference) ·
-[**Integrations**](#-integrations) ·
-[**FAQ**](#-faq)
+[![PyPI version](https://img.shields.io/pypi/v/zelt-ai?style=flat-square&color=10b981&label=PyPI)](https://pypi.org/project/zelt-ai/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-3b82f6?style=flat-square)](https://www.python.org/downloads/)
+[![Runs locally](https://img.shields.io/badge/runs-100%25_local-8b5cf6?style=flat-square)](#installation)
+[![Docker ready](https://img.shields.io/badge/docker-ready-06b6d4?style=flat-square)](#rest-service)
+[![Code style: Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json&style=flat-square)](https://github.com/astral-sh/ruff)
+[![MIT license](https://img.shields.io/badge/license-MIT-f4c430?style=flat-square)](LICENSE)
+
+**[PyPI](https://pypi.org/project/zelt-ai/) · [Documentation](DOCUMENTATION.md) · [Research paper](PAPER.md) · [Changelog](CHANGELOG.md)**
+
+[Quick start](#quick-start) · [How Zelt works](#how-zelt-works) · [What you can use it with](#what-you-can-use-it-with) · [Examples](#examples) · [Results](#measured-performance) · [FAQ](#faq) · [Documentation](#documentation)
+
+<code>pip install zelt-ai</code>
+
+</div>
+
+> [!IMPORTANT]
+> Get Zelt from [codewithulavesh/zelt](https://github.com/codewithulavesh/zelt) or the
+> [`zelt-ai` package on PyPI](https://pypi.org/project/zelt-ai/). The package name is
+> **`zelt-ai`**; you import it as `zelt`. A similar repository or package name does not
+> establish that a download is official.
+
+<div align="center">
+
+<br />
+
+<img src="docs/assets/zelt-banner.png" alt="Zelt: stop reasoning LLMs from overthinking. 37.9% less compute, 0.00% accuracy drop, at most 2% certified harm." width="1000" />
+
+<br /><br />
+
+<img src="docs/assets/zelt-demo.gif" alt="Zelt demo: 576 reasoning tokens fill in, 432 turn out to be wasted, then Zelt stops at token 144 and the counters drop to 144 tokens and 0.54 seconds." width="300" />
+
+<br />
+
+<sub>Illustrative example run: the answer was ready at token 144, but full chain-of-thought kept going to 576.</sub>
+
+<br />
+
+</div>
+
+---
+
+Reasoning models such as DeepSeek-R1 and Qwen2.5-Math think out loud before they answer. That thinking makes them accurate, but they often keep going long after the answer is settled, re-checking and second-guessing for hundreds of tokens you pay for in time and compute.
+
+Zelt watches the reasoning as it unfolds. At regular intervals it takes a cheap look at what the model would answer right now, scores how trustworthy that answer is, and stops generation once it is confident enough. The confidence threshold is calibrated with a finite-sample statistical bound, so you get a measured, bounded accuracy risk instead of a guess.
+
+Zelt runs locally on CUDA, Apple Silicon (MPS) or CPU, and can also sit in front of an existing Ollama or vLLM server. No hosted API is required.
+
+## Quick start
+
+### Install
+
+With Python 3.9+ and pip installed, run:
 
 ```bash
 pip install zelt-ai
 ```
 
----
+Add extras when you need them:
 
-## 💡 Why Zelt?
+| Command | Adds | Use it when |
+| --- | --- | --- |
+| `pip install zelt-ai` | SDK, CLI, benchmark, calibration, bundled decider (CPU) | You want to evaluate or integrate quickly |
+| `pip install "zelt-ai[model]"` | Local Hugging Face inference (PyTorch) | You run models on your own GPU or Apple Silicon |
+| `pip install "zelt-ai[server]"` | REST service and web studio | You deploy Zelt as a service |
+| `pip install "zelt-ai[full]"` | `model` + `server` | You want everything |
 
-Reasoning models such as **DeepSeek-R1** and **Qwen2.5-Math** think out loud before they answer. That thinking is what makes them accurate, but they often keep going long after the answer is already settled, re-checking and second-guessing for hundreds of tokens you pay for in time and compute.
-
-```text
-Full chain-of-thought   ████████████████████████████████████  576 tokens · 2.10 s
-                        ▲ answer is already correct here
-Zelt early exit         █████████                             144 tokens · 0.54 s   ⚡ stopped
-```
-*Illustrative run on `What is 17 * 23?`. Measured averages on a real benchmark are in Measured Performance.*
-
-**Zelt watches the reasoning as it unfolds.** At regular intervals it takes a cheap look at what the model would answer *right now*, scores how trustworthy that answer is, and stops generation once it is confident enough. The confidence threshold is calibrated with a finite-sample statistical bound, so you get **a measured, bounded accuracy risk instead of a guess**.
-
-| | |
-|---|---|
-| 💰 **Fewer tokens** | **37.9%** fewer reasoning tokens on a real DeepSeek-R1 benchmark (27.9% net after probe overhead) |
-| ⚡ **Faster answers** | **1.61×** speedup on that benchmark; individual easy questions can be much faster |
-| 🛡️ **Risk-controlled** | Harm rate bounded at **≤ 2%** with 90% confidence (Clopper-Pearson). **0.00%** observed on the held-out test set |
-| 🔌 **No lock-in** | Hugging Face (CUDA / Apple MPS / CPU), **Ollama**, **vLLM**, or any OpenAI-compatible server |
-| 🏠 **100% local** | No OpenAI or other hosted API required |
-| 🧰 **Production-ready** | Streaming, batching, REST service, Prometheus metrics, Docker, local web studio |
-
----
-
-## 🚀 Installation
-
-```bash
-# Core: SDK, CLI, CPU fallback and the bundled pretrained decider
-pip install zelt-ai
-
-# + Local Hugging Face inference (PyTorch, DeepSeek-R1 on CUDA / MPS)
-pip install "zelt-ai[model]"
-
-# + REST server and web studio
-pip install "zelt-ai[server]"
-
-# Everything
-pip install "zelt-ai[full]"
-```
-
-| Extra | Adds | Use it when |
-|---|---|---|
-| *(none)* | SDK, CLI, benchmark, calibration, bundled decider | You want to evaluate or integrate quickly |
-| `model` | Local Hugging Face inference | You run models on your own GPU / Apple Silicon |
-| `server` | FastAPI service and web studio | You deploy Zelt as a service |
-| `full` | `model` + `server` | You want the complete toolkit |
-| `dev` | Test and lint tooling | You contribute to Zelt |
-
-> **Note**
-> Requires **Python 3.9+**. Runs on Apple Silicon (MPS), NVIDIA (CUDA), or plain CPU.
-
----
-
-## ⚡ Quickstart
+### Ask a question
 
 ```python
 import zelt
@@ -93,95 +86,58 @@ print(res.summary())  # latency, savings and confidence breakdown
 
 That is the whole integration. Zelt loads the bundled decider, runs the model, probes periodically, and returns as soon as the answer is certified ready.
 
-Prefer the terminal?
+### Use the terminal
 
 ```bash
 zelt ask -q "What is 17 * 23?"
 ```
 
----
+See the [CLI reference](#cli-reference) for streaming, batching, the web studio and the REST service.
 
-## 🧠 How it works
+### Update Zelt
 
-```text
- Prompt
-   │
-   ▼
- Reasoning model (DeepSeek-R1 · Qwen · ...) ◄──────────────┐
-   │                                                        │
-   │ every 48 tokens                                        │
-   ▼                                                        │
- Probe: greedy decode of ~10 tokens                         │
-   │                                                        │
-   ▼                                                        │
- Extract 18 signals ──► Decider: P(correct | signals)       │
-                              │                             │
-                      P ≥ τ ? │                             │
-                 ┌── yes ─────┴───── no ────────────────────┘
-                 ▼
-          ⚡ Stop early, return probed answer
+```bash
+pip install --upgrade zelt-ai
 ```
 
-1. **Periodic probes.** Every `k` tokens (default 48), Zelt briefly forces the model to commit to an answer using a short greedy decode (~10 tokens). This is a cheap peek, and the main generation continues unaffected if the answer isn't trusted yet.
+## How Zelt works
+
+Zelt sits beside your model's generation loop. Every few tokens it probes for the current answer, scores it, and either stops or lets the model keep thinking.
+
+![Zelt flow: the prompt goes to the reasoning model; every 48 tokens a probe extracts 18 signals; the decider scores P(correct); if P is at least tau Zelt stops early and returns the probed answer, otherwise the model keeps thinking.](docs/assets/zelt-how-it-works.png)
+
+1. **Periodic probes.** Every `k` tokens (default 48), Zelt briefly forces the model to commit to an answer using a short greedy decode (about 10 tokens). If the answer isn't trusted yet, the main generation simply continues.
 2. **Feature extraction.** Each probe yields **18 signals**, including geometric-mean token probability, sequence entropy, **answer stability** across consecutive probes, and **confidence acceleration**.
 3. **Calibrated decider.** A lightweight scikit-learn logistic regression turns those signals into `P(correct | features)`.
-4. **Risk-controlled threshold.** The stopping threshold **τ** is chosen using a **Clopper-Pearson** upper confidence bound so that the *harm rate* stays at or below **α** (default **2%**) with confidence **1 − δ** (default **90%**).
+4. **Risk-controlled threshold.** The stopping threshold **τ** is chosen using a **Clopper-Pearson** upper confidence bound, so the *harm rate* stays at or below **α** (default **2%**) with confidence **1 − δ** (default **90%**).
 5. **Adaptive stop.** The moment `P(correct) ≥ τ`, generation halts and the probed answer is returned.
 
-#### What is "harm" and why does the bound matter?
+*Harm* means Zelt stopped early **and** the early answer was wrong where full chain-of-thought would have been right. A plain confidence cutoff gives no guarantee on how often that happens; Zelt picks τ so the upper confidence bound on that rate is at most α, which makes the trade-off explicit and auditable.
 
-*Harm* means Zelt stopped early **and** the early answer was wrong where full chain-of-thought would have been right. That is the failure you care about.
+## What you can use it with
 
-A naive confidence cutoff gives you no guarantee on how often that happens. Zelt instead picks τ so that, on calibration data, the **upper confidence bound** of the harm rate is at most α. With the defaults, you are bounding harm at **≤ 2% with 90% confidence**, an explicit, auditable trade-off rather than a hope.
+Zelt requires Python 3.9+. Additional packages depend on how you run it:
 
----
+| Target | What Zelt does | Requirements and guide |
+| --- | --- | --- |
+| Local Hugging Face models | Early-exit `ask()` and `generate()` through `ZeltStoppingCriteria` | `zelt-ai[model]`; CUDA, Apple MPS or CPU; [integrations](#integrations) |
+| Ollama | `zelt.from_ollama(...)` wraps a running server | A running Ollama server; [Ollama and vLLM](#ollama-and-vllm) |
+| vLLM / OpenAI-compatible | `zelt.from_vllm(...)` wraps a `/v1` endpoint | A running vLLM or compatible server; [Ollama and vLLM](#ollama-and-vllm) |
+| Python functions | `@zelt.accelerate` adds early exit to an existing function | Core package; [examples](#examples) |
+| Live streams | `zelt.stream(...)` yields tokens and probe confidence in real time | `zelt-ai[model]`; [examples](#examples) |
+| Batches of questions | `zelt batch -i questions.txt` with token, cost and carbon telemetry | Core package; [CLI reference](#cli-reference) |
+| Web studio | `zelt ui`: live token stream, threshold slider, savings meter | `zelt-ai[server]`; [local studio](#local-studio) |
+| REST service | `zelt serve`: `/ask`, `/stream`, `/compare`, `/health`, `/metrics` | `zelt-ai[server]`; [REST service](#rest-service) |
+| Agent frameworks | A reasoning tool for LangChain, AutoGen or CrewAI | Core package; [integrations](#integrations) |
+| Your own reasoning traces | Train the decider and calibrate τ on your data | Your reasoning runs; [calibration](#calibrate-and-audit-on-your-own-data) |
 
-## 📖 Python API
+Model presets: DeepSeek-R1-Distill-Qwen (1.5B, 7B), DeepSeek-R1-Distill-Llama-8B and Qwen2.5-Math-7B. List them with `zelt.list_presets()`.
 
-### 1. One-liner inference: `zelt.ask`
+## Examples
 
-```python
-import zelt
+### Compare full reasoning with Zelt
 
-res = zelt.ask("Natalia sold 48 clips in April and half as many in May. How many in total?")
-
-print(res.answer)     # "72"
-print(res.summary())
-```
-
-### 2. Live streaming: `zelt.stream`
-
-Watch the reasoning unfold, see every probe, and catch the exact moment Zelt stops.
-
-```python
-import zelt
-
-question = "Natalia sold 48 clips to friends and 24 to family. How many did she sell?"
-
-for chunk in zelt.stream(question):
-    if chunk.is_probe:
-        print(f"\n[⚡ Probe at token {chunk.token_count}: confidence={chunk.score:.2f}]")
-    elif chunk.stopped:
-        print(f"\n✅ Ready! Answer: {chunk.answer}")
-        break
-    else:
-        print(chunk.text, end="", flush=True)
-```
-
-Typical output:
-
-```text
-Okay, so Natalia sold 48 clips to friends and 24 to family. Let me add them...
-[⚡ Probe at token 48: confidence=0.41]
-48 + 24 = 72. So the total is 72...
-[⚡ Probe at token 96: confidence=0.93]
-✅ Ready! Answer: 72
-```
-*Illustrative output. Actual text and scores depend on the model.*
-
-### 3. Side-by-side comparison: `zelt.compare`
-
-Run full chain-of-thought and Zelt on the same question and see exactly what you saved.
+Run both on the same question and see what you saved:
 
 ```python
 import zelt
@@ -201,11 +157,39 @@ print(zelt.compare("What is 15 * 3?").summary())
   Effective Speedup: 3.89x faster
 ════════════════════════════════════════════════════════════
 ```
-*Sample output. Per-question savings vary; easy questions save the most.*
 
-### 4. Soft token budgets: `zelt.token_budget`
+*Sample output. Savings vary per question; easy questions save the most.*
 
-Stop at the first confident answer **or** at a hard ceiling, whichever comes first. Ideal for latency- or cost-sensitive paths.
+### Watch the stop happen live
+
+```python
+import zelt
+
+question = "Natalia sold 48 clips to friends and 24 to family. How many did she sell?"
+
+for chunk in zelt.stream(question):
+    if chunk.is_probe:
+        print(f"\n[⚡ Probe at token {chunk.token_count}: confidence={chunk.score:.2f}]")
+    elif chunk.stopped:
+        print(f"\n✅ Ready! Answer: {chunk.answer}")
+        break
+    else:
+        print(chunk.text, end="", flush=True)
+```
+
+```text
+Okay, so Natalia sold 48 clips to friends and 24 to family. Let me add them...
+[⚡ Probe at token 48: confidence=0.41]
+48 + 24 = 72. So the total is 72...
+[⚡ Probe at token 96: confidence=0.93]
+✅ Ready! Answer: 72
+```
+
+*Illustrative output. Actual text and scores depend on the model.*
+
+### Cap the budget
+
+Stop at the first confident answer **or** at a hard token ceiling, whichever comes first:
 
 ```python
 import zelt
@@ -214,9 +198,7 @@ res = zelt.token_budget(max_tokens=200, question="Calculate 125 * 8")
 print(f"Answer: {res.answer} in {res.tokens} tokens")
 ```
 
-### 5. Drop-in decorator: `@zelt.accelerate`
-
-Add early exit to an existing function without restructuring your code.
+### Accelerate an existing function
 
 ```python
 import zelt
@@ -228,7 +210,7 @@ def solve_math(query: str) -> str:
 print(solve_math("What is 25 * 4?"))   # "100", exits early with compute saved
 ```
 
-### 6. Batch inference with cost tracking: `zelt.batch`
+### Process a batch
 
 ```python
 from zelt import batch
@@ -238,15 +220,9 @@ results = batch(questions)
 print(results.summary())     # token, dollar and carbon savings across the batch
 ```
 
-From the CLI:
+### Ollama and vLLM
 
-```bash
-zelt batch -i questions.txt
-```
-
-### 7. Local models via Ollama or vLLM
-
-No local GPU memory needed in your Python process. Zelt talks to the server you already run.
+Zelt talks to the server you already run, so no model needs to load in your Python process:
 
 ```python
 import zelt
@@ -263,18 +239,7 @@ zt = zelt.from_vllm(
 print(zt.ask("Solve 2x + 10 = 30").answer)
 ```
 
-### 8. Supported model presets
-
-```python
-import zelt
-print(zelt.list_presets())
-```
-
-DeepSeek-R1-Distill-Qwen (1.5B, 7B) · DeepSeek-R1-Distill-Llama-8B · Qwen2.5-Math-7B
-
----
-
-## 🔌 Integrations
+## Integrations
 
 ### Hugging Face `generate()`
 
@@ -332,36 +297,32 @@ class EfficientReasoningTool:
         return str(ask(problem, verbose=False))
 ```
 
----
+## Local studio
 
-## 🖥️ Local Studio
-
-An interactive, fully local web UI to *see* how early exit behaves.
+An interactive, fully local web UI to see how early exit behaves:
 
 ```bash
 zelt ui --port 8000      # then open http://localhost:8000
 ```
 
-- 🎚️ **Threshold slider:** adjust τ and watch the speed/risk trade-off change
-- 📈 **Live token stream & probe pulses:** follow the decider step by step
-- 📊 **Savings analytics:** token comparison bars, confidence gauges, cost meter
+- **Threshold slider:** adjust τ and watch the speed and risk trade-off change.
+- **Live token stream and probe pulses:** follow the decider step by step.
+- **Savings analytics:** token comparison bars, confidence gauges and a cost meter.
 
----
+## REST service
 
-## 🌐 REST Service
-
-Deploy Zelt as a microservice with metrics built in.
+Deploy Zelt as a microservice with metrics built in:
 
 ```bash
 zelt serve --host 0.0.0.0 --port 8000
 ```
 
 | Endpoint | Purpose |
-|---|---|
+| --- | --- |
 | `POST /ask` | Synchronous early-exit query |
 | `POST /stream` | Server-Sent Events live token stream |
-| `POST /compare` | Full CoT vs early-exit benchmark |
-| `GET /health` | Kubernetes liveness / readiness probe |
+| `POST /compare` | Full chain-of-thought vs early-exit benchmark |
+| `GET /health` | Kubernetes liveness and readiness probe |
 | `GET /metrics` | Prometheus metrics: tokens saved, queries served, latency |
 
 ```bash
@@ -370,34 +331,29 @@ curl -X POST http://localhost:8000/ask \
   -d '{"question": "What is 17 * 23?"}'
 ```
 
-**Docker**
+Docker:
 
 ```bash
 docker run -p 8000:8000 zelt-ai:latest
 ```
 
----
+## Measured performance
 
-## 📊 Measured Performance
+Evaluated on **real DeepSeek-R1-Distill-Qwen-1.5B trajectories** on **GSM8K**: 1,319 trajectories, scored on a **331-question held-out test split**.
 
-Evaluated on **real DeepSeek-R1-Distill-Qwen-1.5B trajectories** on **GSM8K** (1,319 trajectories; **331-question held-out test split**).
+| Method | Threshold | Accuracy | Avg tokens | Token reduction | Net incl. probes | Stop rate | Harm rate |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| Full chain-of-thought (baseline) | n/a | **78.25%** | 750.7 | 0.0% | 0.0% | 0.0% | 0.00% |
+| Fixed token budget | 1,632 | 76.74% (−1.51%) | 507.7 | 32.4% | 21.5% | 15.1% | 1.51% |
+| Raw confidence | 0.79 | 78.25% | 430.6 | 42.6% | 33.4% | 40.2% | 0.00% |
+| **Zelt (learned decider)** | **0.50** | **78.25%** | **465.9** | **37.9%** | **27.9%** | 37.8% | **0.00%** |
 
-| Method | Threshold | Accuracy | Δ Acc | Avg tokens | Token reduction | Net incl. probes | Stop rate | Harm rate |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| Full CoT (baseline) | n/a | **78.25%** | baseline | 750.7 | 0.0% | 0.0% | 0.0% | 0.00% |
-| Fixed token budget | 1,632 | 76.74% | −1.51% | 507.7 | 32.4% | 21.5% | 15.1% | 1.51% |
-| Raw confidence | 0.79 | 78.25% | +0.00% | 430.6 | 42.6% | 33.4% | 40.2% | 0.00% |
-| **Zelt (learned decider)** | **0.50** | **78.25%** | **+0.00%** | **465.9** | **37.9%** | **27.9%** | 37.8% | **0.00%** |
+- **37.9% compute reduction** (**1.61× speedup**), or **27.9% net** once probe overhead is counted.
+- **No accuracy drop** (78.25% retained) and **0.00% observed harm** on the test set.
+- **Certified harm ≤ 2% at 90% confidence.**
+- **AUROC 0.9976** and **ECE 0.014**, about 3× better calibrated than raw confidence.
 
-**Headline results**
-
-- ⚡ **37.9% compute reduction** (**1.61× speedup**), or **27.9% net** once probe overhead is counted
-- 🎯 **No accuracy drop** (78.25% retained) with **0.00% observed harm** on the test set
-- 🛡️ **Certified harm ≤ 2% at 90% confidence**
-- 📐 **AUROC 0.9976** and **ECE 0.014**, about **3× better calibrated** than raw confidence
-
-> **Tip**
-> The fixed token budget is the common baseline: it saves tokens but loses accuracy (−1.51%) because it cuts blindly. Zelt saves more *and* keeps accuracy, because it only stops when the answer is actually ready.
+A fixed token budget is the common baseline, and it cuts every question at the same point, which is why it loses accuracy. Zelt only stops when the answer is actually ready.
 
 ### What this means in cost
 
@@ -408,19 +364,18 @@ A back-of-the-envelope example using the **net** figure, so probe overhead is al
 1,000,000 queries                          ≈  209 million tokens saved
 At an example price of $2 per 1M output tokens  →  ≈ $419 saved
 ```
+
 *Hypothetical price for illustration. On self-hosted GPUs the saving shows up as lower latency and higher throughput instead.*
 
 ### Scope and limitations
 
-- The bundled decider was trained on **DeepSeek-R1 trajectories from GSM8K-style math word problems**. On other domains or models, **re-calibrate** with your own data (see below) before relying on the risk bound.
-- Reported numbers come from a **single held-out split**. Treat them as strong evidence on this setup, not a universal guarantee.
-- Savings vary by question: easy questions exit early, hard ones may run to completion, which is exactly the intended behavior.
+- The bundled decider was trained on **DeepSeek-R1 trajectories from GSM8K-style math word problems**. On other domains or models, [re-calibrate](#calibrate-and-audit-on-your-own-data) with your own data before relying on the risk bound.
+- Reported numbers come from a **single held-out split**. Treat them as strong evidence for this setup, not a universal guarantee.
+- Savings vary by question: easy ones exit early, hard ones may run to completion, which is the intended behavior.
 
----
+## Calibrate and audit on your own data
 
-## 🎛️ Calibrate and audit on your own data
-
-The risk bound is only as good as the data behind it. Zelt ships the tooling to re-fit and verify it.
+The risk bound is only as good as the data behind it. Zelt ships the tooling to re-fit and verify it:
 
 ```bash
 # Train the decider and calibrate τ on your own reasoning runs
@@ -441,22 +396,18 @@ report = zelt.evaluate(limit=50)
 print(report.summary())     # includes the exact harm upper confidence bound
 ```
 
-**Tuning the trade-off**
-
 | Knob | Default | Effect |
-|---|:---:|---|
-| `α` (harm bound) | 2% | Lower = safer, stops later |
-| `δ` (1 − confidence) | 10% (90% confidence) | Lower = stricter guarantee, stops later |
-| `k` (probe interval) | 48 tokens | Smaller = reacts sooner, more probe overhead |
+| --- | :---: | --- |
+| `α` (harm bound) | 2% | Lower is safer, but Zelt stops later |
+| `δ` (1 − confidence) | 10% (90% confidence) | Lower gives a stricter guarantee, but Zelt stops later |
+| `k` (probe interval) | 48 tokens | Smaller reacts sooner, with more probe overhead |
 
----
-
-## 🛠️ CLI Reference
+## CLI reference
 
 | Command | Description |
-|---|---|
+| --- | --- |
 | `zelt ask -q "..."` | Early-exit inference on one question |
-| `zelt demo -q "..."` | Side-by-side: full CoT vs Zelt |
+| `zelt demo -q "..."` | Side-by-side: full chain-of-thought vs Zelt |
 | `zelt stream -q "..."` | Stream tokens live with probe confidence |
 | `zelt batch -i list.txt` | Batch inference with cost and carbon telemetry |
 | `zelt ui` | Local web studio at `http://localhost:8000` |
@@ -466,45 +417,84 @@ print(report.summary())     # includes the exact harm upper confidence bound
 | `zelt live-eval` | Live early-exit generation on the held-out test split |
 | `zelt selftest` | GPU-free pipeline check on synthetic data |
 
----
+## FAQ
 
-## ❓ FAQ
+<details>
+<summary><strong>Will Zelt change my model's answers?</strong></summary>
 
-#### Will Zelt change my model's answers?
+Only when it stops early *and* the early answer differs from the final one, which is what "harm" measures. Zelt bounds how often that happens (at most 2% at 90% confidence by default) and reports the observed rate, which was 0.00% on the GSM8K test split.
 
-Only when it stops early *and* the early answer differs from the final one, which is what "harm" measures. Zelt bounds how often that happens (≤ 2% at 90% confidence by default) and reports the observed rate, which was 0.00% on the GSM8K test split.
+</details>
 
-#### Do I need a GPU or an API key?
+<details>
+<summary><strong>Do I need a GPU or an API key?</strong></summary>
 
-No API key, and no GPU is required. Zelt runs on CPU, Apple Silicon (MPS), or CUDA, and can also front an existing Ollama or vLLM server.
+No API key, and no GPU is required. Zelt runs on CPU, Apple Silicon (MPS) or CUDA, and can also front an existing Ollama or vLLM server.
 
-#### Does it work with my model?
+</details>
 
-Presets cover DeepSeek-R1-Distill (Qwen 1.5B / 7B, Llama 8B) and Qwen2.5-Math-7B. Other chain-of-thought models can work through the Hugging Face, Ollama, or vLLM adapters; use `zelt fit` to calibrate the decider for them.
+<details>
+<summary><strong>Does it work with my model?</strong></summary>
 
-#### What do probes cost?
+Presets cover DeepSeek-R1-Distill (Qwen 1.5B and 7B, Llama 8B) and Qwen2.5-Math-7B. Other chain-of-thought models can work through the Hugging Face, Ollama or vLLM adapters; use `zelt fit` to calibrate the decider for them.
 
-Each probe is a short (~10 token) greedy decode every 48 tokens. That overhead is why the **net** reduction (27.9%) is lower than the **gross** reduction (37.9%) in the benchmark. Both are reported so you can judge honestly.
+</details>
 
-#### Why not just cap the token budget?
+<details>
+<summary><strong>What do probes cost?</strong></summary>
 
-A fixed cap cuts easy and hard questions at the same point. In the benchmark, a fixed budget lost 1.51% accuracy while saving less than Zelt. Zelt decides per question, based on evidence that the answer is ready.
+Each probe is a short (about 10 token) greedy decode every 48 tokens. That overhead is why the **net** reduction (27.9%) is lower than the **gross** reduction (37.9%) in the benchmark. Both are reported so you can judge honestly.
 
----
+</details>
 
-## 🗂️ Project resources
+<details>
+<summary><strong>Why not just cap the token budget?</strong></summary>
 
-- 📘 [Full documentation](DOCUMENTATION.md)
-- 📄 [Research paper](PAPER.md) (LaTeX source: [`paper/zelt_paper.tex`](paper/zelt_paper.tex))
-- 📝 [Changelog](CHANGELOG.md)
-- 🐛 [Report a bug](https://github.com/codewithulavesh/zelt/issues)
-- 📦 [PyPI package](https://pypi.org/project/zelt-ai/)
+A fixed cap cuts easy and hard questions at the same point. In the benchmark a fixed budget lost 1.51% accuracy while saving less than Zelt. Zelt decides per question, based on evidence that the answer is ready.
 
----
+</details>
 
-## 🤝 Contributing
+<details>
+<summary><strong>Does Zelt upload my prompts?</strong></summary>
 
-Contributions are welcome.
+No. Zelt runs locally and needs no hosted API. If you point it at an Ollama or vLLM server, your prompts go to that server and nowhere else.
+
+</details>
+
+<details>
+<summary><strong>What should I do if I hit a bug?</strong></summary>
+
+Update first; a recent release may already fix it:
+
+```bash
+pip install --upgrade zelt-ai
+```
+
+Retry the same task. If the problem persists, [open an issue](https://github.com/codewithulavesh/zelt/issues) with your Zelt version, model, steps to reproduce and error output.
+
+</details>
+
+## Documentation
+
+- [Full documentation](DOCUMENTATION.md): complete technical reference.
+- [Research paper](PAPER.md): the method and the Clopper-Pearson derivation (LaTeX source in [`paper/zelt_paper.tex`](paper/zelt_paper.tex)).
+- [Changelog](CHANGELOG.md): what changed in each release.
+- [PyPI package](https://pypi.org/project/zelt-ai/): releases and install files.
+- [Issue tracker](https://github.com/codewithulavesh/zelt/issues): bugs and feature requests.
+
+## Star history
+
+<a href="https://www.star-history.com/?repos=codewithulavesh%2Fzelt&amp;type=date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=codewithulavesh/zelt&amp;type=date&amp;theme=dark&amp;legend=top-left" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=codewithulavesh/zelt&amp;type=date" />
+    <img alt="Zelt GitHub star history" src="https://api.star-history.com/chart?repos=codewithulavesh/zelt&amp;type=date" />
+  </picture>
+</a>
+
+## Contributing
+
+We'd love your help with Zelt! [Open an issue](https://github.com/codewithulavesh/zelt/issues) to report a bug or suggest a feature, or send a pull request to improve the code or docs.
 
 ```bash
 git clone https://github.com/codewithulavesh/zelt.git
@@ -513,13 +503,11 @@ pip install -e ".[dev]"
 zelt selftest          # quick pipeline check, no GPU needed
 ```
 
-1. Fork the repo and create a feature branch
-2. Make your change, and lint with **Ruff**
-3. Open a pull request describing what changed and why
+1. Fork the repo and create a feature branch.
+2. Make your change and lint it with **Ruff**.
+3. Open a pull request describing what changed and why.
 
----
-
-## 📚 Citation
+## Citation
 
 If Zelt is useful in your research, please cite it:
 
@@ -532,12 +520,14 @@ If Zelt is useful in your research, please cite it:
 }
 ```
 
----
+## License
 
-## 📄 License
+[MIT](LICENSE)
 
-Released under the [MIT License](LICENSE).
+<div align="center">
 
 **Built by [Ulavayya K. Karaguppi](https://github.com/codewithulavesh)** · Instagram [@ulavesh_7](https://instagram.com/ulavesh_7)
 
 If Zelt saves you tokens, a ⭐ on the repo helps others find it.
+
+</div>
